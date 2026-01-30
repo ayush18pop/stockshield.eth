@@ -1,0 +1,39 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.env
+.env.*
+
+# Build output
+dist/
+build/
+out/
+coverage/
+lib/
+
+# Hardhat / Truffle / Foundry (Solidity contracts)
+artifacts/
+cache/
+typechain/
+typechain-types/
+*.tsbuildinfo
+
+# VSCode
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Misc
+*.local
+.idea/
+*.sublime-workspace
+*.sublime-project
