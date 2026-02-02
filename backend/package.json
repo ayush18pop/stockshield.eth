@@ -4,13 +4,25 @@
   "description": "",
   "main": "index.js",
   "devDependencies": {
+    "@types/node": "^25.2.0",
+    "@types/ws": "^8.18.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:yellow": "npx ts-node src/yellow/test-client.ts",
+    "dev": "npx ts-node"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "@erc7824/nitrolite": "^0.5.3",
+    "dotenv": "^17.2.3",
+    "viem": "^2.45.1",
+    "ws": "^8.19.0"
+  }
 }
