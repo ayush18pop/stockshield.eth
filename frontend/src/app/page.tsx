@@ -30,7 +30,22 @@ export default function Home() {
       {/* NAV */}
       <nav className="fixed top-0 w-full z-50 h-20 flex items-center justify-center border-b border-white/5 bg-[#050505]/80 backdrop-blur-sm">
         <div className="w-full max-w-[1400px] px-8 flex justify-between items-center">
-          <span className="font-sans text-xl font-medium tracking-tight">StockShield.</span>
+          {/* Logo - Avant-Garde Web3 Style */}
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative">
+              <img
+                src="/icon.png"
+                alt="StockShield"
+                className="w-8 h-8 transition-transform duration-300 group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-[#FF4D00] blur-lg opacity-0 group-hover:opacity-30 transition-opacity duration-300" />
+            </div>
+            <div className="flex items-baseline gap-0.5">
+              <span className="font-sans text-lg font-semibold tracking-tight text-white">Stock</span>
+              <span className="font-sans text-lg font-semibold tracking-tight text-[#FF4D00]">Shield</span>
+              <span className="text-[#FF4D00] text-xs font-mono ml-1 opacity-50">v1</span>
+            </div>
+          </Link>
 
           <div className="hidden md:flex gap-12 text-[13px] font-medium tracking-wide uppercase text-neutral-400">
             <Link href="/demo" className="hover:text-white transition-colors">Demo +</Link>

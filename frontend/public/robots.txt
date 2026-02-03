@@ -1,0 +1,12 @@
+# StockShield Robots.txt
+# https://stockshield.io
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://stockshield.io/sitemap.xml
+
+# Disallow admin/internal paths
+Disallow: /api/
+Disallow: /_next/
