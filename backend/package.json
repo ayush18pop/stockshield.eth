@@ -12,7 +12,13 @@
   "scripts": {
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx ts-node src/main.ts",
     "test:yellow": "npx ts-node src/yellow/test-client.ts",
+    "test:integration": "npx ts-node src/yellow/integration-test.ts",
+    "test:vpin": "npx ts-node src/yellow/vpin-calculator.ts",
+    "test:regime": "npx ts-node src/yellow/regime-detector.ts",
+    "test:gap": "npx ts-node src/yellow/gap-auction.ts",
+    "test:oracle": "npx ts-node src/oracle/oracle-aggregator.ts",
     "dev": "npx ts-node"
   },
   "keywords": [],
@@ -21,6 +27,8 @@
   "type": "commonjs",
   "dependencies": {
     "@erc7824/nitrolite": "^0.5.3",
+    "@pythnetwork/price-service-client": "^1.10.0",
+    "@pythnetwork/pyth-evm-js": "^2.0.0",
     "dotenv": "^17.2.3",
     "viem": "^2.45.1",
     "ws": "^8.19.0"

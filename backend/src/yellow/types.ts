@@ -103,6 +103,7 @@ export type YellowMessageType =
     | 'create_channel'
     | 'resize_channel'
     | 'close_channel'
+    | 'state_update'
     | 'payment'
     | 'session_message'
     | 'error';
@@ -129,6 +130,32 @@ export interface YellowClientConfig {
         adjudicator: `0x${string}`;
         token: `0x${string}`;
     };
+}
+
+// ============================================================================
+// Regime Types (for state broadcasting)
+// ============================================================================
+
+export enum Regime {
+    CORE_SESSION = 'CORE_SESSION',
+    SOFT_OPEN = 'SOFT_OPEN',
+    PRE_MARKET = 'PRE_MARKET',
+    AFTER_HOURS = 'AFTER_HOURS',
+    OVERNIGHT = 'OVERNIGHT',
+    WEEKEND = 'WEEKEND',
+    HOLIDAY = 'HOLIDAY',
+}
+
+export interface StateUpdate {
+    channelId: string;
+    timestamp: number;
+    vpin: number;
+    regime: Regime;
+    recommendedFee: number;
+    oraclePrice?: bigint;        // Oracle consensus price
+    oracleConfidence?: number;   // Oracle confidence (0-1)
+    volatility?: number;
+    inventoryImbalance?: number;
 }
 
 // Default Sepolia configuration

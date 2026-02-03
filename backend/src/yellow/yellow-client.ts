@@ -79,6 +79,21 @@ export class YellowClient {
             transport: http(this.config.rpcUrl),
             account: this.account,
         });
+
+        // Initialize Nitrolite Client
+        this.client = new NitroliteClient({
+            publicClient: this.publicClient as any,
+            walletClient: this.walletClient as any,
+            stateSigner: new WalletStateSigner(this.walletClient as any),
+            addresses: {
+                custody: this.config.addresses.custody,
+                adjudicator: this.config.addresses.adjudicator,
+            },
+            chainId: this.config.chainId,
+            challengeDuration: 3600n,
+        });
+
+        console.log('💡 Note: SDK on-chain finalization is optional for demo');
     }
 
     // ============================================================================
@@ -250,9 +265,24 @@ export class YellowClient {
         const ws = this.ws;
 
         return new Promise(async (resolve, reject) => {
-            const channelHandler = (msg: YellowMessage) => {
+            const channelHandler = async (msg: YellowMessage) => {
                 if (msg.type === 'create_channel' && msg.channelId) {
-                    console.log(`✅ Channel created: ${msg.channelId}`);
+                    console.log(`✅ Channel created on node: ${msg.channelId}`);
+
+                    try {
+                        if (this.client && msg.data) {
+                            const params = msg.data as any;
+                            await this.client.createChannel({
+                                channel: params.channel,
+                                unsignedInitialState: params.state,
+                                serverSignature: params.serverSignature,
+                            });
+                            console.log('✅ Channel state finalized in SDK');
+                        }
+                    } catch (error) {
+                        console.warn('⚠️  SDK on-chain finalization skipped (demo mode):', error instanceof Error ? error.message : String(error));
+                        console.log('   Channel is active on ClearNode and can be used for state updates');
+                    }
 
                     this.channels.set(msg.channelId, {
                         channelId: msg.channelId,
@@ -312,9 +342,22 @@ export class YellowClient {
         const ws = this.ws;
 
         return new Promise(async (resolve, reject) => {
-            const resizeHandler = (msg: YellowMessage) => {
+            const resizeHandler = async (msg: YellowMessage) => {
                 if (msg.type === 'resize_channel') {
-                    console.log('✅ Channel funded!');
+                    console.log('✅ Channel resize success on node!');
+
+                    try {
+                        if (this.client && msg.data) {
+                            const params = msg.data as any;
+                            await this.client.resizeChannel({
+                                resizeState: params.resizeState,
+                                proofStates: params.proofStates,
+                            });
+                            console.log('✅ Resize state finalized in SDK');
+                        }
+                    } catch (error) {
+                        console.warn('⚠️  SDK resize finalization skipped (demo mode):', error instanceof Error ? error.message : String(error));
+                    }
 
                     const channel = this.channels.get(channelId);
                     if (channel) {
@@ -373,9 +416,22 @@ export class YellowClient {
         const ws = this.ws;
 
         return new Promise(async (resolve, reject) => {
-            const closeHandler = (msg: YellowMessage) => {
+            const closeHandler = async (msg: YellowMessage) => {
                 if (msg.type === 'close_channel') {
-                    console.log('✅ Channel closed!');
+                    console.log('✅ Channel close success on node!');
+
+                    try {
+                        if (this.client && msg.data) {
+                            const params = msg.data as any;
+                            await this.client.closeChannel({
+                                finalState: params.finalState || params.lastPaidState,
+                                stateData: params.stateData || '0x',
+                            });
+                            console.log('✅ Close state finalized in SDK');
+                        }
+                    } catch (error) {
+                        console.warn('⚠️  SDK close finalization skipped (demo mode):', error instanceof Error ? error.message : String(error));
+                    }
 
                     const channel = this.channels.get(channelId);
                     if (channel) {
