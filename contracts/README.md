@@ -112,6 +112,17 @@ forge script script/Deploy.s.sol:DeployStockShield --rpc-url <your_rpc_url> --pr
 
 **Deployed:** February 6, 2026 | **Chain ID:** 11155111
 
+### Mock Tokens (Sepolia Testnet)
+
+| Token | Symbol | Address |
+|-------|--------|---------|
+| **Mock USDC** | USDC | `0xEfC6Ef3eCa52f283cB1fBeCf76DdCF121B4F68Ee` |
+| **Tokenized Apple** | tAAPL | `0x4C5D4B070De6B899a1278E440b2D162c76f2E9Ae` |
+| **Tokenized Tesla** | tTSLA | `0xF6Bc466421a1e37Ab8AD01828DD33F6A2f78C528` |
+| **Tokenized NVIDIA** | tNVDA | `0xFDB233Bf927faF6aFCF19aa17aC9212021d8d9E6` |
+| **Tokenized Google** | tGOOGL | `0xaD1E8d9d183278683C72Bf8290Eeb7Fc58feC020` |
+| **Tokenized Microsoft** | tMSFT | `0xe0728B3F54265477dE979786939Ab8BEDd55072B` |
+
 ## Documentation
 
 - [Foundry Book](https://book.getfoundry.sh/)
