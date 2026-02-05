@@ -251,16 +251,22 @@ contract RegimeOracle {
     function _timestampToDate(
         uint256 timestamp
     ) internal pure returns (uint256 year, uint256 month, uint256 day) {
-        // Simplified date conversion
-        uint256 daysSinceEpoch = timestamp / 86400;
-        uint256 yearsSinceEpoch = daysSinceEpoch / 365; // Approximation
-        year = 1970 + yearsSinceEpoch;
-
-        // More accurate calculation would be needed for production
-        month = 1;
-        day = 1;
-
-        return (year, month, day);
+        // Days since Unix epoch
+        uint256 _days = timestamp / 86400;
+        
+        // Calculate year
+        uint256 L = _days + 68569 + 2440588; // Convert to Julian Day Number + offset
+        uint256 N = (4 * L) / 146097;
+        L = L - (146097 * N + 3) / 4;
+        uint256 _year = (4000 * (L + 1)) / 1461001;
+        L = L - (1461 * _year) / 4 + 31;
+        uint256 _month = (80 * L) / 2447;
+        uint256 _day = L - (2447 * _month) / 80;
+        L = _month / 11;
+        _month = _month + 2 - 12 * L;
+        _year = 100 * (N - 49) + _year + L;
+        
+        return (_year, _month, _day);
     }
 
     function _getNthSundayOfMonth(

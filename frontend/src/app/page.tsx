@@ -48,14 +48,19 @@ export default function Home() {
           </Link>
 
           <div className="hidden md:flex gap-12 text-[13px] font-medium tracking-wide uppercase text-neutral-400">
-            <Link href="/demo" className="hover:text-white transition-colors">Demo +</Link>
+            <Link href="/demo" className="hover:text-[#FF4D00] transition-colors flex items-center gap-1">
+              Demo <span className="text-[8px] px-1 py-0.5 bg-[#FF4D00]/20 text-[#FF4D00] rounded">LIVE</span>
+            </Link>
+            <Link href="/swap" className="hover:text-white transition-colors flex items-center gap-1">
+              Trade <span className="text-[8px] px-1 py-0.5 bg-blue-500/20 text-blue-400 rounded">SEPOLIA</span>
+            </Link>
             <Link href="/docs" className="hover:text-white transition-colors">Docs +</Link>
             <Link href="/StockSheild_whitepaper.pdf" target="_blank" className="hover:text-white transition-colors">Whitepaper +</Link>
           </div>
 
-          <Link href="/app">
-            <Button variant="outline" className="rounded-sm border-white/10 bg-white/5 text-[13px] font-medium px-6 py-5 hover:bg-white hover:text-black transition-all uppercase tracking-wide">
-              Launch App
+          <Link href="/demo">
+            <Button variant="outline" className="rounded-sm border-[#FF4D00]/30 bg-[#FF4D00]/10 text-[#FF4D00] text-[13px] font-medium px-6 py-5 hover:bg-[#FF4D00] hover:text-white transition-all uppercase tracking-wide">
+              Try Demo →
             </Button>
           </Link>
         </div>
@@ -118,17 +123,17 @@ export default function Home() {
 
             <div className="grid md:grid-cols-2 gap-16 text-base leading-relaxed text-neutral-400">
               <p>
-                Traditional AMMs trade 24/7, but <span className="text-white">stock markets have trading hours</span>. When NYSE closes at 4 PM ET, LPs can&apos;t hedge—yet arbitrageurs exploit stale prices overnight and on weekends.
+                Traditional AMMs trade 24/7, but <span className="text-white">stock markets have trading hours</span>. When NYSE closes at 4 PM ET, LPs can't hedge—arbitrageurs extract the entire gap.
               </p>
               <div className="space-y-6">
                 <p>
-                  <span className="text-white">LPs lose 40–60% more</span> on tokenized securities vs. crypto assets due to this fundamental mismatch.
+                  <span className="text-white">LPs lose over $92M annually</span> in tokenized securities due to weekend gaps and continuous LVR extraction.
                 </p>
                 <p>
-                  StockShield is a Uniswap v4 Hook that dynamically adjusts fees based on market regime, detects toxic flow via VPIN, captures gap value through auctions, and pauses trading during extreme volatility.
+                  StockShield captures 70-90% of this value back. By using Yellow Network for off-chain risk computation and Uniswap v4 hooks for on-chain enforcement, we turn toxic flow into LP revenue.
                 </p>
                 <p>
-                  The result: LPs keep more of what they earn, and arbitrageurs pay fair value for information asymmetry.
+                  The result: An 82% efficiency gain for liquidity providers in the tokenized securities era.
                 </p>
               </div>
             </div>

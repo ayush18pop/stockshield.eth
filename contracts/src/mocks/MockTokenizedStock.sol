@@ -76,4 +76,14 @@ contract MockTokenizedStock is ERC20 {
         require(newOwner != address(0), "Invalid address");
         owner = newOwner;
     }
+
+    /**
+     * @notice Public faucet - anyone can mint test tokens
+     * @param amount Amount to mint (max 1000 tokens per call)
+     */
+    function faucet(uint256 amount) external {
+        require(amount <= 1000 * 10 ** _decimals, "Max 1000 tokens per faucet");
+        _mint(msg.sender, amount);
+        emit Minted(msg.sender, amount);
+    }
 }

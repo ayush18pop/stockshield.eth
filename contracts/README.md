@@ -32,12 +32,14 @@ contracts/
 ## Installation
 
 1. Install Foundry:
+
 ```shell
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
 ```
 
-2. Install dependencies:
+1. Install dependencies:
+
 ```shell
 forge install foundry-rs/forge-std
 forge install Uniswap/v4-core
@@ -104,7 +106,7 @@ forge script script/Deploy.s.sol:DeployStockShield --rpc-url <your_rpc_url> --pr
 | Contract | Address |
 |----------|---------|
 | **PoolManager** (Uniswap V4) | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` |
-| **RegimeOracle** | `0x2BE81Bb676ED1F4776cB0F3B31770B0037aC6cC7` |
+| **RegimeOracle** | `0xCC46a9e6FFB834a7a1C126f9D4e803bF418CccA6` |
 | **StockShieldHook** | `0x9F724ceb362016f8B4B93A96EF93Ce8AdEfc3ac0` |
 | **GapAuction** | `0x0bb31dd5939c625b70a3c209c3B278EacA202a02` |
 | **MarginVault** | `0x609819C1e511B1537F1603f8eDdA622C05E59929` |
@@ -114,14 +116,16 @@ forge script script/Deploy.s.sol:DeployStockShield --rpc-url <your_rpc_url> --pr
 
 ### Mock Tokens (Sepolia Testnet)
 
+All tokens have a public `faucet()` function for testing:
+
 | Token | Symbol | Address |
 |-------|--------|---------|
-| **Mock USDC** | USDC | `0xEfC6Ef3eCa52f283cB1fBeCf76DdCF121B4F68Ee` |
-| **Tokenized Apple** | tAAPL | `0x4C5D4B070De6B899a1278E440b2D162c76f2E9Ae` |
-| **Tokenized Tesla** | tTSLA | `0xF6Bc466421a1e37Ab8AD01828DD33F6A2f78C528` |
-| **Tokenized NVIDIA** | tNVDA | `0xFDB233Bf927faF6aFCF19aa17aC9212021d8d9E6` |
-| **Tokenized Google** | tGOOGL | `0xaD1E8d9d183278683C72Bf8290Eeb7Fc58feC020` |
-| **Tokenized Microsoft** | tMSFT | `0xe0728B3F54265477dE979786939Ab8BEDd55072B` |
+| **Mock USDC** | USDC | `0xc9b62Ff3Ca454a31f7107EDc5CA013c713f5eA4B` |
+| **Tokenized Apple** | tAAPL | `0xA7c512e81963a4907AF5729EabC4Ddf321205Cde` |
+| **Tokenized Tesla** | tTSLA | `0xb6Df0585Fa15bfa0c942D8C175532CDbc3104fb3` |
+| **Tokenized NVIDIA** | tNVDA | `0x372712995Fc96F259dE6E1A6f74F06B10E6A6063` |
+| **Tokenized Google** | tGOOGL | `0xBe88F14d6993057D8048cCdfde5981dab34d05f0` |
+| **Tokenized Microsoft** | tMSFT | `0x1C1C3974d35304396cDD93136bfAD06b13E65AB3` |
 
 ## Documentation
 

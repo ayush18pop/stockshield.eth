@@ -9,13 +9,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     api,
+    WS_URL,
     RegimeResponse,
     VPINResponse,
     PriceResponse,
     FeeResponse,
     PoolsResponse,
     CircuitBreakerResponse,
-    AuctionsResponse
+    AuctionsResponse,
+    HealthResponse
 } from '@/lib/api';
 
 // ============================================================================
@@ -40,7 +42,6 @@ function useFetch<T>(
 
     const fetch = useCallback(async () => {
         try {
-            setIsLoading(true);
             setError(null);
             const result = await fetcher();
             setData(result);
@@ -58,7 +59,8 @@ function useFetch<T>(
             const interval = setInterval(fetch, pollInterval);
             return () => clearInterval(interval);
         }
-    }, [...deps, fetch, pollInterval]);
+        return undefined;
+    }, [...deps, fetch, pollInterval]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return { data, isLoading, error, refetch: fetch };
 }
@@ -120,7 +122,94 @@ export function useActiveAuctions(pollInterval: number = 5000) {
  * Hook for checking API health
  */
 export function useHealth() {
-    return useFetch(() => api.getHealth(), [], 60000);
+    return useFetch<HealthResponse>(() => api.getHealth(), [], 60000);
+}
+
+// ============================================================================
+// WebSocket Hook for Real-Time Updates
+// ============================================================================
+
+interface WebSocketMessage {
+    type: string;
+    data?: unknown;
+    poolId?: string;
+    vpin?: number;
+    regime?: string;
+    level?: number;
+    from?: string;
+    to?: string;
+}
+
+export function useWebSocket(channels: string[] = ['vpin', 'regime', 'prices']) {
+    const [connected, setConnected] = useState(false);
+    const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
+    const [vpinUpdates, setVpinUpdates] = useState<Map<string, number>>(new Map());
+    const [currentRegime, setCurrentRegime] = useState<string | null>(null);
+
+    useEffect(() => {
+        let socket: WebSocket | null = null;
+        let reconnectTimeout: NodeJS.Timeout;
+
+        const connect = () => {
+            try {
+                socket = new WebSocket(WS_URL);
+
+                socket.onopen = () => {
+                    setConnected(true);
+                    // Subscribe to channels
+                    socket?.send(JSON.stringify({
+                        type: 'subscribe',
+                        channels,
+                    }));
+                };
+
+                socket.onmessage = (event) => {
+                    try {
+                        const message: WebSocketMessage = JSON.parse(event.data);
+                        setLastMessage(message);
+
+                        // Handle specific message types
+                        if (message.type === 'vpin:update' && message.poolId && message.vpin !== undefined) {
+                            setVpinUpdates(prev => new Map(prev).set(message.poolId!, message.vpin!));
+                        }
+                        if (message.type === 'regime:change' && message.to) {
+                            setCurrentRegime(message.to);
+                        }
+                    } catch {
+                        console.warn('Failed to parse WebSocket message');
+                    }
+                };
+
+                socket.onclose = () => {
+                    setConnected(false);
+                    // Reconnect after 3 seconds
+                    reconnectTimeout = setTimeout(connect, 3000);
+                };
+
+                socket.onerror = () => {
+                    socket?.close();
+                };
+
+            } catch {
+                // Retry connection
+                reconnectTimeout = setTimeout(connect, 3000);
+            }
+        };
+
+        connect();
+
+        return () => {
+            clearTimeout(reconnectTimeout);
+            socket?.close();
+        };
+    }, [channels.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    return {
+        connected,
+        lastMessage,
+        vpinUpdates,
+        currentRegime,
+    };
 }
 
 // ============================================================================
@@ -151,3 +240,4 @@ export function useDashboard(poolId: string = '0xdefault'): DashboardData {
         error: regime.error || vpin.error || circuitBreaker.error || pools.error,
     };
 }
+

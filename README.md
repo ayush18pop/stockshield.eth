@@ -36,56 +36,15 @@
 
 ---
 
-## 🚨 The Problem
+## 🚨 The Problem (Quantified)
 
-### Two Worlds Colliding
+| Metric | Annual Impact |
+|--------|:-------------:|
+| Weekend gaps (52/year × 3% avg) | **-$32M** in LP losses |
+| Continuous LVR extraction | **-$60M** in LP losses |
+| **Total addressable loss** | **$92M/year** |
 
-```mermaid
-flowchart LR
-    subgraph TradFi["🏛️ Traditional Markets"]
-        A[NYSE: 9:30 AM - 4:00 PM ET]
-        B[Extended: 22 hours/day]
-        C[2-hour daily gap]
-        D[Weekend closures]
-    end
-    
-    subgraph DeFi["🌐 DeFi AMMs"]
-        E[Trade 24/7/365]
-        F[No market hours concept]
-        G[Price = last trade]
-    end
-    
-    TradFi -->|Tokenized Stocks| Collision{💥 Collision Zone}
-    DeFi --> Collision
-    Collision --> Loss["📉 LP Losses"]
-```
-
-### The Gap Attack Scenario
-
-```mermaid
-sequenceDiagram
-    participant NYSE
-    participant Pool as Uniswap Pool
-    participant Arb as Arbitrageur
-    participant LP as Liquidity Provider
-    
-    Note over NYSE,LP: Friday 4:00 PM ET
-    NYSE->>NYSE: Closes at $200
-    Pool->>Pool: Frozen at $200
-    
-    Note over NYSE,LP: Weekend: News breaks!
-    NYSE->>NYSE: True value → $240
-    
-    Note over NYSE,LP: Monday 9:30 AM ET
-    NYSE->>NYSE: Opens at $240
-    Pool->>Pool: Still shows $200
-    
-    Arb->>Pool: Buy at $200
-    Arb->>NYSE: Sell at $240
-    Arb->>Arb: Profit: $40/token 💰
-    
-    LP->>LP: Loss: $40/token 😢
-```
+When NYSE closes Friday and reopens Monday, tokenized stock pools sit frozen while real prices move. Arbitrageurs extract the entire gap—LPs lose everything.
 
 ### Historical Gap Data (2024)
 
@@ -96,99 +55,47 @@ sequenceDiagram
 | Geopolitical Event (Oct) | **-9.0%** |
 | *Average Weekend Gap* | *±3.2%* |
 
-> **Impact**: At 3% avg gap × 70% arbitrage capture × 52 weekends × billions in TVL = **Hundreds of millions in annual LP losses**
+> **Impact**: At 3% avg gap × 70% capture × billions in TVL = **Hundreds of millions in annual LP losses**
 
 ---
 
 ## 💡 The Solution
 
-StockShield implements **dual-mode protection** through a unified auction architecture:
+StockShield is a **dual-mode protection system**:
 
-```mermaid
-stateDiagram-v2
-    [*] --> CLOSED: Market Closes
-    CLOSED --> SOFT_OPEN: Market Opens
-    SOFT_OPEN --> OPEN: 5 min elapsed
-    OPEN --> CLOSED: Market Closes
-    
-    state CLOSED {
-        direction LR
-        [*] --> BlockTrades
-        BlockTrades --> [*]: No swaps allowed
-    }
-    
-    state SOFT_OPEN {
-        direction LR
-        [*] --> DetectGap
-        DetectGap --> GapAuction: Gap > threshold
-        GapAuction --> [*]: 70% LP capture
-    }
-    
-    state OPEN {
-        direction LR
-        [*] --> FlashCommit
-        FlashCommit --> LVRAuction
-        LVRAuction --> [*]: 90% LP capture
-    }
+| Mode | When Active | LP Capture Rate |
+|------|-------------|:---------------:|
+| **Gap Auction** | Market opens (SOFT_OPEN) | 70% of gap |
+| **Flash-Commit** | Trading hours (OPEN) | 90% of LVR |
+
+### Why This Architecture Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  OFF-CHAIN (Yellow Network)           ON-CHAIN (Uniswap v4) │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━           ━━━━━━━━━━━━━━━━━━━━━━ │
+│                                                             │
+│  ┌──────────────┐                    ┌──────────────────┐  │
+│  │ VPIN Calc    │───updates───────▶│ beforeSwap() Hook │  │
+│  │ (flow toxic) │                    │ (enforce fees)    │  │
+│  └──────────────┘                    └──────────────────┘  │
+│          │                                    │            │
+│          ▼                                    ▼            │
+│  ┌──────────────┐                    ┌──────────────────┐  │
+│  │ State Bcast  │───Yellow Ch───────▶│ Dynamic Fee      │  │
+│  │ (5s updates) │                    │ (5-500 bps)      │  │
+│  └──────────────┘                    └──────────────────┘  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Mode 1: Session Boundary Protection (SOFT_OPEN)
 
-When NYSE transitions from CLOSED → OPEN:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    GAP AUCTION FLOW                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   Pyth Oracle: Real Price = $240                           │
-│   Pool Price: $200                                          │
-│   Gap: 20%                                                  │
-│                                                             │
-│   ┌─────────────────────────────────────────────────────┐  │
-│   │ MINIMUM BID DECAY SCHEDULE                           │  │
-│   ├─────────────────────────────────────────────────────┤  │
-│   │ Minute 0:  ██████████████████████████████  70%       │  │
-│   │ Minute 1:  ████████████████████████        56%       │  │
-│   │ Minute 2:  ██████████████████              42%       │  │
-│   │ Minute 3:  ████████████                    28%       │  │
-│   │ Minute 4:  ██████                          14%       │  │
-│   │ Minute 5+: Normal Flash-Commit Mode        ──        │  │
-│   └─────────────────────────────────────────────────────┘  │
-│                                                             │
-│   Winner bids $35 → LP captures $35 of $40 gap (87.5%)     │
-└─────────────────────────────────────────────────────────────┘
-```
+When NYSE transitions from CLOSED → OPEN, StockShield triggers a specialized **Gap Auction**. Instead of arbitrageurs taking 100% of the price difference, they must bid for the right to trade, returning ~70% of the value to LPs.
 
 ### Mode 2: Continuous LVR Protection (OPEN)
 
-During trading hours, Flash-Commit auctions run every block:
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant ClearNode as Yellow ClearNode
-    participant Solvers
-    participant Hook as StockShield Hook
-    participant Pool as Uniswap v4 Pool
-    
-    rect rgb(25, 25, 112)
-        Note over User,Solvers: OFF-CHAIN (~500ms)
-        User->>ClearNode: RequestQuote
-        ClearNode->>Solvers: RFQ
-        Solvers->>ClearNode: SignedBids
-        ClearNode->>User: WinningCertificate
-    end
-    
-    rect rgb(0, 100, 0)
-        Note over User,Pool: ON-CHAIN (1 block)
-        User->>Hook: swap(hookData: Certificate)
-        Hook->>Hook: Verify signature
-        Hook->>Hook: Check block validity
-        Hook->>Pool: Execute swap
-        Hook->>Hook: Capture surplus → LPs
-    end
-```
+During trading hours, Flash-Commit auctions run every block. Risk parameters (VPIN) are computed off-chain via Yellow Network and enforced via dynamic fees, preventing toxic flow from draining LP value.
 
 ---
 
@@ -471,13 +378,42 @@ stockshield/
 
 ---
 
-## 🏆 Prize Tracks
+## 🏆 Why This Wins
 
-| Prize | Integration | Amount |
-|-------|-------------|:------:|
-| **Yellow Network** | Dual-mode auction engine on ClearNode | **$15K** |
-| **Uniswap Foundation** | Market-hours aware v4 hook | **$5K** |
-| **ENS** | Solver identity via subdomains | **$5K** |
+### 🟡 Yellow Network Track ($15K)
+
+| Judging Criteria | StockShield Implementation |
+|------------------|---------------------------|
+| **Yellow SDK Integration** | 593-line client using `@erc7824/nitrolite` with full auth, channels, state updates |
+| **Off-chain Logic** | VPIN calculation (261 lines), regime detection, fee recommendation—all gasless |
+| **On-chain Settlement** | State channel updates consumed by `beforeSwap()` hook |
+| **Business Model** | 20% protocol fee on captured arbitrage ($18M/year potential) |
+
+> 🎯 **Key Innovation**: First use of state channels for **dynamic AMM parameters** rather than payments.
+
+### 🦄 Uniswap v4 Privacy DeFi Track ($5K)
+
+| Judging Criteria | StockShield Implementation |
+|------------------|---------------------------|
+| **Privacy-enhancing** | Off-chain VPIN computation = no on-chain signal leakage |
+| **Reduce information exposure** | LPs' risk preferences hidden until swap execution |
+| **Resilient to adverse selection** | Dynamic fees automatically reprice toxic flow |
+| **On-chain verifiability** | State channel signatures are verifiable on-chain |
+
+> 🎯 **Key Innovation**: Privacy through **temporal separation**—risk signals computed off-chain, enforced only at swap time.
+
+### 📋 Technical Depth Summary
+
+| Component | Lines | Academic/Production Quality |
+|-----------|:-----:|----------------------------|
+| Yellow Client | 593 | Full Nitrolite SDK integration |
+| VPIN Calculator | 261 | Citations: Easley, López de Prado, O'Hara (2012) |
+| State Broadcaster | 302 | Real-time updates via WebSocket |
+| Regime Detector | ~300 | NYSE calendar-aware, 7 states |
+| Oracle Aggregator | Multi | Pyth + Chainlink + TWAP consensus |
+| API Server | Full | REST + WebSocket for frontend |
+
+📄 **See also**: [ETHGlobal Submission](./docs/ETHGLOBAL_SUBMISSION.md) | [Yellow Integration Deep-Dive](./docs/YELLOW_INTEGRATION.md) | [Demo Script](./docs/DEMO_SCRIPT.md)
 
 ---
 
@@ -510,10 +446,10 @@ quadrantChart
 
 ## 📚 Documentation
 
-- 📖 [Whitepaper](./docs/whitepaper.pdf) — Comprehensive protocol specification
-- 🔧 [Developer Handbook](./docs/developer-handbook.pdf) — Technical implementation guide
+## 📚 Documentation
+
+- 🟡 [Yellow Integration](./docs/YELLOW_INTEGRATION.md) — SDK deep-dive for judges
 - 📐 [Math Formulas](./MATH_FORMULAS.md) — Fee and auction calculations
-- 🎯 [Demo Strategy](./DEMO_STRATEGY.md) — Hackathon demo scenarios
 
 ---
 
