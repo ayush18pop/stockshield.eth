@@ -2,5 +2,48 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+test = "test"
+script = "script"
+
+# Solidity compiler settings
+solc = "0.8.24"
+evm_version = "cancun"
+
+# Optimization - minimal settings to avoid stack issues
+optimizer = true
+optimizer_runs = 1
+# via_ir = true  # Disabled - causes stack issues in V4 library
+
+# Remappings for dependencies
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "v4-core/=lib/v4-periphery/lib/v4-core/",
+    "v4-periphery/=lib/v4-periphery/",
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/"
+]
+
+# Formatter settings
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = true
+
+# Fuzz testing configuration
+[fuzz]
+runs = 256
+max_test_rejects = 65536
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+# Linter settings - disable style warnings
+[lint]
+exclude_lints = [
+    "unsafe-typecast",
+    "unused-import",
+    "mixed-case-variable",
+    "mixed-case-function",
+    "screaming-snake-case-immutable",
+    "unwrapped-modifier-logic",
+    "asm-keccak256"
+]

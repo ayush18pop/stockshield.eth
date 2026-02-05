@@ -13,7 +13,7 @@ export interface Certificate {
     poolId: string;
     bidder: string;
     bidAmount: bigint;
-    swapParams?: SwapParams;
+    Params?: Params;
     validAfterBlock: bigint;
     validUntilBlock: bigint;
     nonce: bigint;
@@ -21,10 +21,10 @@ export interface Certificate {
 }
 
 // ============================================================================
-// Swap & Quote Types  
+//  & Quote Types  
 // ============================================================================
 
-export interface SwapParams {
+export interface Params {
     tokenIn: string;
     tokenOut: string;
     amountIn: bigint;
