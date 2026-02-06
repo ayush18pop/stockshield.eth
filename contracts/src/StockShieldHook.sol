@@ -12,6 +12,8 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 import {toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams, ModifyLiquidityParams} from "v4-core/src/types/PoolOperation.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title StockShieldHook
@@ -21,6 +23,7 @@ import {SwapParams, ModifyLiquidityParams} from "v4-core/src/types/PoolOperation
 contract StockShieldHook is BaseHook {
     using PoolIdLibrary for PoolKey;
     using LPFeeLibrary for uint24;
+    using MessageHashUtils for bytes32;
 
     // ============ Enums ============
 
@@ -65,6 +68,17 @@ contract StockShieldHook is BaseHook {
         bool isValid;
     }
 
+    struct SignedTradeState {
+        bytes32 channelId;
+        uint256 vpin; // Scaled by 1e18
+        uint8 regime;
+        uint24 recommendedFee;
+        uint256 turnNum;
+        uint256 timestamp;
+        uint256 gapAuctionBid;
+        bytes signature;
+    }
+
     // ============ Constants ============
 
     uint256 private constant PRECISION = 1e18;
@@ -74,6 +88,7 @@ contract StockShieldHook is BaseHook {
     uint256 private constant MAX_STALENESS_EXTENDED = 120;
     uint256 private constant MAX_DEVIATION_CORE = 300; // 3% in bps
     uint256 private constant MAX_DEVIATION_EXTENDED = 500; // 5% in bps
+    uint256 private constant SIGNED_VPIN_TO_HOOK_SCALE = 1e12; // 1e18 -> 1e6
 
     uint8 private constant LEVEL_NORMAL = 0;
     uint8 private constant LEVEL_WARNING = 1;
@@ -85,11 +100,14 @@ contract StockShieldHook is BaseHook {
 
     mapping(PoolId => MarketState) public markets;
     mapping(Regime => FeeParams) public regimeFeeParams;
+    mapping(bytes32 => uint256) public channelTurnNum;
 
     address public regimeOracle;
     address public priceOracle;
     address public gapAuction;
     address public marginVault;
+    address public yellowSigner;
+    uint256 public signedStateMaxAge = 120;
 
     // ============ Events ============
 
@@ -102,6 +120,13 @@ contract StockShieldHook is BaseHook {
     event DynamicFeeUpdated(PoolId indexed poolId, uint24 newFee);
     event GapAuctionStarted(PoolId indexed poolId, uint256 endTime);
     event VPINUpdated(PoolId indexed poolId, uint64 newVPIN);
+    event SignedStateVerified(
+        PoolId indexed poolId,
+        bytes32 indexed channelId,
+        uint256 turnNum,
+        uint24 recommendedFee,
+        uint8 regime
+    );
 
     // ============ Errors ============
 
@@ -110,6 +135,13 @@ contract StockShieldHook is BaseHook {
     error TradingPaused();
     error GapAuctionBidTooLow();
     error UnauthorizedCaller();
+    error MissingSignedState();
+    error InvalidSignedState();
+    error InvalidYellowSignature();
+    error SignedStateExpired();
+    error StaleSignedStateTurn();
+    error InvalidSignedRegime();
+    error InvalidSignedFee();
 
     // ============ Constructor ============
 
@@ -177,9 +209,17 @@ contract StockShieldHook is BaseHook {
         int24
     ) internal override returns (bytes4) {
         PoolId poolId = key.toId();
-        markets[poolId].currentRegime = Regime.CORE_SESSION;
-        markets[poolId].regimeStartTime = uint40(block.timestamp);
-        markets[poolId].circuitBreakerLevel = LEVEL_NORMAL;
+        
+        // Initialize all market state fields to prevent issues during liquidity operations
+        MarketState storage state = markets[poolId];
+        state.currentRegime = Regime.CORE_SESSION;
+        state.regimeStartTime = uint40(block.timestamp);
+        state.circuitBreakerLevel = LEVEL_NORMAL;
+        state.inGapAuction = false;
+        state.gapAuctionEndTime = 0;
+        state.vpinScore = 0;
+        state.inventoryImbalance = 0;
+        state.realizedVolatility = 0;
 
         return BaseHook.afterInitialize.selector;
     }
@@ -193,8 +233,12 @@ contract StockShieldHook is BaseHook {
         PoolId poolId = key.toId();
         MarketState storage state = markets[poolId];
 
-        // Step 1: Update regime
-        _updateRegime(state);
+        // Step 1: Verify signed off-chain state and apply it to market state
+        SignedTradeState memory signedState = _decodeAndVerifySignedState(
+            poolId,
+            hookData
+        );
+        _applySignedState(poolId, state, signedState);
 
         // Step 2: Validate trading conditions
         SwapContext memory ctx = _validateSwap(state, poolId);
@@ -202,11 +246,11 @@ contract StockShieldHook is BaseHook {
 
         // Step 3: Check gap auction
         if (state.inGapAuction) {
-            _validateGapAuction(state, hookData);
+            _validateGapAuction(state, signedState.gapAuctionBid);
         }
 
-        // Step 4: Calculate dynamic fee
-        uint24 fee = _calculateDynamicFee(state, ctx);
+        // Step 4: Enforce signed recommended fee after verification
+        uint24 fee = _validateSignedFee(state.currentRegime, signedState.recommendedFee);
 
         emit DynamicFeeUpdated(poolId, fee);
 
@@ -339,6 +383,87 @@ contract StockShieldHook is BaseHook {
         return _validateSwapConditions(state, poolId);
     }
 
+    function _decodeAndVerifySignedState(
+        PoolId poolId,
+        bytes calldata hookData
+    ) internal returns (SignedTradeState memory signedState) {
+        if (yellowSigner == address(0)) revert UnauthorizedCaller();
+        if (hookData.length == 0) revert MissingSignedState();
+        if (hookData.length < 288) revert InvalidSignedState();
+
+        signedState = abi.decode(
+            hookData,
+            (SignedTradeState)
+        );
+
+        if (signedState.regime > uint8(Regime.HOLIDAY))
+            revert InvalidSignedRegime();
+        if (block.timestamp > signedState.timestamp + signedStateMaxAge)
+            revert SignedStateExpired();
+        if (signedState.turnNum <= channelTurnNum[signedState.channelId])
+            revert StaleSignedStateTurn();
+
+        bytes32 stateHash = keccak256(
+            abi.encode(
+                address(this),
+                block.chainid,
+                PoolId.unwrap(poolId),
+                signedState.channelId,
+                signedState.vpin,
+                signedState.regime,
+                signedState.recommendedFee,
+                signedState.turnNum,
+                signedState.timestamp,
+                signedState.gapAuctionBid
+            )
+        );
+        bytes32 digest = stateHash.toEthSignedMessageHash();
+        address recovered = ECDSA.recover(digest, signedState.signature);
+        if (recovered != yellowSigner) revert InvalidYellowSignature();
+
+        channelTurnNum[signedState.channelId] = signedState.turnNum;
+
+        emit SignedStateVerified(
+            poolId,
+            signedState.channelId,
+            signedState.turnNum,
+            signedState.recommendedFee,
+            signedState.regime
+        );
+    }
+
+    function _applySignedState(
+        PoolId poolId,
+        MarketState storage state,
+        SignedTradeState memory signedState
+    ) internal {
+        Regime nextRegime = Regime(signedState.regime);
+        if (state.currentRegime != nextRegime) {
+            emit RegimeChanged(poolId, state.currentRegime, nextRegime);
+            state.currentRegime = nextRegime;
+            state.regimeStartTime = uint40(block.timestamp);
+        }
+
+        uint256 vpinScaledDown = signedState.vpin / SIGNED_VPIN_TO_HOOK_SCALE;
+        uint64 nextVPIN = vpinScaledDown > type(uint64).max
+            ? type(uint64).max
+            : uint64(vpinScaledDown);
+        state.vpinScore = nextVPIN;
+        emit VPINUpdated(poolId, nextVPIN);
+    }
+
+    function _validateSignedFee(
+        Regime regime,
+        uint24 recommendedFee
+    ) internal view returns (uint24) {
+        FeeParams memory params = regimeFeeParams[regime];
+        uint256 maxFee = _getMaxFee(regime);
+        if (recommendedFee < params.baseFee || recommendedFee > maxFee) {
+            revert InvalidSignedFee();
+        }
+        return recommendedFee;
+    }
+
     function _calculateDynamicFee(
         MarketState storage state,
         SwapContext memory ctx
@@ -425,18 +550,11 @@ contract StockShieldHook is BaseHook {
 
     function _validateGapAuction(
         MarketState storage state,
-        bytes calldata hookData
+        uint256 bid
     ) internal view {
         if (block.timestamp > state.gapAuctionEndTime) {
             return; // Auction ended
         }
-
-        // Decode bid from hookData
-        if (hookData.length < 32) {
-            revert GapAuctionBidTooLow();
-        }
-
-        uint256 bid = abi.decode(hookData, (uint256));
         uint256 minBid = _calculateMinGapBid(state);
 
         if (bid < minBid) {
@@ -506,6 +624,16 @@ contract StockShieldHook is BaseHook {
     function setGapAuction(address _auction) external {
         // Add access control
         gapAuction = _auction;
+    }
+
+    function setYellowSigner(address _yellowSigner) external {
+        // Add access control
+        yellowSigner = _yellowSigner;
+    }
+
+    function setSignedStateMaxAge(uint256 maxAge) external {
+        // Add access control
+        signedStateMaxAge = maxAge;
     }
 
     function updateVPIN(PoolId poolId, uint64 newVPIN) external {

@@ -47,20 +47,25 @@ export default function Home() {
             </div>
           </Link>
 
-          <div className="hidden md:flex gap-12 text-[13px] font-medium tracking-wide uppercase text-neutral-400">
+          <div className="hidden md:flex gap-8 text-[13px] font-medium tracking-wide uppercase text-neutral-400">
             <Link href="/demo" className="hover:text-[#FF4D00] transition-colors flex items-center gap-1">
               Demo <span className="text-[8px] px-1 py-0.5 bg-[#FF4D00]/20 text-[#FF4D00] rounded">LIVE</span>
             </Link>
-            <Link href="/swap" className="hover:text-white transition-colors flex items-center gap-1">
+            <Link href="/app" className="hover:text-white transition-colors flex items-center gap-1">
               Trade <span className="text-[8px] px-1 py-0.5 bg-blue-500/20 text-blue-400 rounded">SEPOLIA</span>
             </Link>
-            <Link href="/docs" className="hover:text-white transition-colors">Docs +</Link>
+            <Link href="/pools" className="hover:text-white transition-colors">
+              Pools
+            </Link>
+            <Link href="/analytics" className="hover:text-white transition-colors">
+              Analytics
+            </Link>
             <Link href="/StockSheild_whitepaper.pdf" target="_blank" className="hover:text-white transition-colors">Whitepaper +</Link>
           </div>
 
-          <Link href="/demo">
+          <Link href="/app">
             <Button variant="outline" className="rounded-sm border-[#FF4D00]/30 bg-[#FF4D00]/10 text-[#FF4D00] text-[13px] font-medium px-6 py-5 hover:bg-[#FF4D00] hover:text-white transition-all uppercase tracking-wide">
-              Try Demo →
+              Start Trading →
             </Button>
           </Link>
         </div>

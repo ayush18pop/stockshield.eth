@@ -277,7 +277,9 @@ function InteractivePriceChart({
             ctx.beginPath();
 
             // Logic for line color based on trend
-            const isUp = prices[prices.length - 1] >= prices[0];
+            const lastPrice = prices[prices.length - 1];
+            const firstPrice = prices[0];
+            const isUp = (lastPrice !== undefined && firstPrice !== undefined) ? lastPrice >= firstPrice : true;
             const lineColor = '#FF4D00'; // Always brand color for main line
 
             ctx.strokeStyle = lineColor;

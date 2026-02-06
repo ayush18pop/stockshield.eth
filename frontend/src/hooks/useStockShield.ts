@@ -1,243 +1,106 @@
-'use client';
+
+import { useReadContract } from 'wagmi';
+import { CONTRACTS, REGIME_ORACLE_ABI, STOCK_SHIELD_HOOK_ABI, GAP_AUCTION_ABI, MOCK_TOKENS, computePoolId } from '@/lib/contracts';
+import { Address } from 'viem';
 
 /**
- * StockShield API Hooks
- * 
- * React hooks for fetching data from the StockShield backend.
+ * Compute real pool IDs from token addresses.
+ * PoolId = keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks))
  */
+function getPoolId(tokenSymbol: string): `0x${string}` {
+    const tokenKey = `t${tokenSymbol}` as keyof typeof MOCK_TOKENS;
+    const stockAddr = MOCK_TOKENS[tokenKey] || MOCK_TOKENS[tokenSymbol as keyof typeof MOCK_TOKENS];
+    if (!stockAddr) {
+        // Fallback: return zero bytes32
+        return '0x0000000000000000000000000000000000000000000000000000000000000000';
+    }
 
-import { useState, useEffect, useCallback } from 'react';
-import {
-    api,
-    WS_URL,
-    RegimeResponse,
-    VPINResponse,
-    PriceResponse,
-    FeeResponse,
-    PoolsResponse,
-    CircuitBreakerResponse,
-    AuctionsResponse,
-    HealthResponse
-} from '@/lib/api';
+    const usdcAddr = MOCK_TOKENS.USDC;
 
-// ============================================================================
-// Generic Fetch Hook
-// ============================================================================
-
-interface UseFetchState<T> {
-    data: T | null;
-    isLoading: boolean;
-    error: Error | null;
-    refetch: () => void;
+    return computePoolId(
+        stockAddr,
+        usdcAddr,
+        CONTRACTS.LP_FEE,
+        CONTRACTS.TICK_SPACING,
+        CONTRACTS.STOCK_SHIELD_HOOK
+    );
 }
 
-function useFetch<T>(
-    fetcher: () => Promise<T>,
-    deps: unknown[] = [],
-    pollInterval?: number
-): UseFetchState<T> {
-    const [data, setData] = useState<T | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
+export type Regime = 'Core Session' | 'Soft Open' | 'Pre-Market' | 'After Hours' | 'Overnight' | 'Weekend' | 'Holiday';
 
-    const fetch = useCallback(async () => {
-        try {
-            setError(null);
-            const result = await fetcher();
-            setData(result);
-        } catch (err) {
-            setError(err instanceof Error ? err : new Error('Unknown error'));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [fetcher]);
+const REGIME_LABELS: Record<number, Regime> = {
+    0: 'Core Session',
+    1: 'Soft Open',
+    2: 'Pre-Market',
+    3: 'After Hours',
+    4: 'Overnight',
+    5: 'Weekend',
+    6: 'Holiday',
+};
 
-    useEffect(() => {
-        fetch();
+export function useStockShield(tokenSymbol: string = 'tAAPL') {
+    // 1. Read Regime from Oracle
+    const { data: regimeId, refetch: refetchRegime } = useReadContract({
+        address: CONTRACTS.REGIME_ORACLE,
+        abi: REGIME_ORACLE_ABI,
+        functionName: 'getCurrentRegime',
+        chainId: 11155111,
+    });
 
-        if (pollInterval) {
-            const interval = setInterval(fetch, pollInterval);
-            return () => clearInterval(interval);
-        }
-        return undefined;
-    }, [...deps, fetch, pollInterval]); // eslint-disable-line react-hooks/exhaustive-deps
+    const { data: nextTransition } = useReadContract({
+        address: CONTRACTS.REGIME_ORACLE,
+        abi: REGIME_ORACLE_ABI,
+        functionName: 'getNextTransition',
+        chainId: 11155111,
+    });
 
-    return { data, isLoading, error, refetch: fetch };
-}
+    // 2. Read Market State from Hook
+    // Compute real PoolId from token addresses
+    const poolId = getPoolId(tokenSymbol);
 
-// ============================================================================
-// Specific Hooks
-// ============================================================================
+    const { data: marketState, refetch: refetchState } = useReadContract({
+        address: CONTRACTS.STOCK_SHIELD_HOOK,
+        abi: STOCK_SHIELD_HOOK_ABI,
+        functionName: 'markets',
+        args: [poolId],
+        chainId: 11155111,
+    });
 
-/**
- * Hook for current market regime
- */
-export function useRegime(pollInterval: number = 30000) {
-    return useFetch<RegimeResponse>(() => api.getRegime(), [], pollInterval);
-}
+    // Read Auction Count to infer ID
+    const { data: auctionCount } = useReadContract({
+        address: CONTRACTS.GAP_AUCTION,
+        abi: GAP_AUCTION_ABI,
+        functionName: 'auctionCount',
+        chainId: 11155111,
+    });
 
-/**
- * Hook for VPIN score
- */
-export function useVPIN(poolId: string, pollInterval: number = 5000) {
-    return useFetch<VPINResponse>(() => api.getVPIN(poolId), [poolId], pollInterval);
-}
+    // Derived State
+    const regime = REGIME_LABELS[Number(regimeId)] || 'Core Session';
 
-/**
- * Hook for oracle price
- */
-export function usePrice(asset: string, pollInterval: number = 10000) {
-    return useFetch<PriceResponse>(() => api.getPrice(asset), [asset], pollInterval);
-}
+    // Default values if hook read fails (or pool doesn't exist yet)
+    const volatility = marketState ? Number(marketState[4]) : 0; // realizedVolatility
+    const vpinScore = marketState ? Number(marketState[5]) : 0; // vpinScore
+    const circuitBreakerLevel = marketState ? Number(marketState[7]) : 0;
+    const isGapAuction = marketState ? Boolean(marketState[8]) : false;
 
-/**
- * Hook for dynamic fee
- */
-export function useFee(poolId: string, pollInterval: number = 5000) {
-    return useFetch<FeeResponse>(() => api.getFees(poolId), [poolId], pollInterval);
-}
-
-/**
- * Hook for all pools
- */
-export function usePools(pollInterval: number = 30000) {
-    return useFetch<PoolsResponse>(() => api.getPools(), [], pollInterval);
-}
-
-/**
- * Hook for circuit breaker status
- */
-export function useCircuitBreaker(pollInterval: number = 10000) {
-    return useFetch<CircuitBreakerResponse>(() => api.getCircuitBreaker(), [], pollInterval);
-}
-
-/**
- * Hook for active auctions
- */
-export function useActiveAuctions(pollInterval: number = 5000) {
-    return useFetch<AuctionsResponse>(() => api.getActiveAuctions(), [], pollInterval);
-}
-
-/**
- * Hook for checking API health
- */
-export function useHealth() {
-    return useFetch<HealthResponse>(() => api.getHealth(), [], 60000);
-}
-
-// ============================================================================
-// WebSocket Hook for Real-Time Updates
-// ============================================================================
-
-interface WebSocketMessage {
-    type: string;
-    data?: unknown;
-    poolId?: string;
-    vpin?: number;
-    regime?: string;
-    level?: number;
-    from?: string;
-    to?: string;
-}
-
-export function useWebSocket(channels: string[] = ['vpin', 'regime', 'prices']) {
-    const [connected, setConnected] = useState(false);
-    const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
-    const [vpinUpdates, setVpinUpdates] = useState<Map<string, number>>(new Map());
-    const [currentRegime, setCurrentRegime] = useState<string | null>(null);
-
-    useEffect(() => {
-        let socket: WebSocket | null = null;
-        let reconnectTimeout: NodeJS.Timeout;
-
-        const connect = () => {
-            try {
-                socket = new WebSocket(WS_URL);
-
-                socket.onopen = () => {
-                    setConnected(true);
-                    // Subscribe to channels
-                    socket?.send(JSON.stringify({
-                        type: 'subscribe',
-                        channels,
-                    }));
-                };
-
-                socket.onmessage = (event) => {
-                    try {
-                        const message: WebSocketMessage = JSON.parse(event.data);
-                        setLastMessage(message);
-
-                        // Handle specific message types
-                        if (message.type === 'vpin:update' && message.poolId && message.vpin !== undefined) {
-                            setVpinUpdates(prev => new Map(prev).set(message.poolId!, message.vpin!));
-                        }
-                        if (message.type === 'regime:change' && message.to) {
-                            setCurrentRegime(message.to);
-                        }
-                    } catch {
-                        console.warn('Failed to parse WebSocket message');
-                    }
-                };
-
-                socket.onclose = () => {
-                    setConnected(false);
-                    // Reconnect after 3 seconds
-                    reconnectTimeout = setTimeout(connect, 3000);
-                };
-
-                socket.onerror = () => {
-                    socket?.close();
-                };
-
-            } catch {
-                // Retry connection
-                reconnectTimeout = setTimeout(connect, 3000);
-            }
-        };
-
-        connect();
-
-        return () => {
-            clearTimeout(reconnectTimeout);
-            socket?.close();
-        };
-    }, [channels.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Infer active auction ID (if count > 0, it's count - 1, simplified)
+    // In production we'd want a more robust way or event indexing
+    const activeAuctionId = auctionCount ? String(Number(auctionCount) - 1) : null;
 
     return {
-        connected,
-        lastMessage,
-        vpinUpdates,
-        currentRegime,
+        regime,
+        regimeId: Number(regimeId),
+        nextTransition,
+        marketState: {
+            volatility,
+            vpinScore,
+            circuitBreakerLevel,
+            isGapAuction,
+        },
+        activeAuctionId,
+        refetch: () => {
+            refetchRegime();
+            refetchState();
+        }
     };
 }
-
-// ============================================================================
-// Combined Hook for Dashboard
-// ============================================================================
-
-export interface DashboardData {
-    regime: RegimeResponse | null;
-    vpin: VPINResponse | null;
-    circuitBreaker: CircuitBreakerResponse | null;
-    pools: PoolsResponse | null;
-    isLoading: boolean;
-    error: Error | null;
-}
-
-export function useDashboard(poolId: string = '0xdefault'): DashboardData {
-    const regime = useRegime();
-    const vpin = useVPIN(poolId);
-    const circuitBreaker = useCircuitBreaker();
-    const pools = usePools();
-
-    return {
-        regime: regime.data,
-        vpin: vpin.data,
-        circuitBreaker: circuitBreaker.data,
-        pools: pools.data,
-        isLoading: regime.isLoading || vpin.isLoading || circuitBreaker.isLoading || pools.isLoading,
-        error: regime.error || vpin.error || circuitBreaker.error || pools.error,
-    };
-}
-

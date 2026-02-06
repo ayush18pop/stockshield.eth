@@ -67,6 +67,7 @@ async function main() {
 
     try {
         await yellowClient.connect();
+        await yellowClient.authenticate();
         channelId = await yellowClient.createChannel();
         console.log(`✅ Yellow Network connected, channel: ${channelId}\n`);
 
@@ -92,7 +93,20 @@ async function main() {
     // ========================================================================
     console.log('3️⃣  Starting API Server...');
 
-    const apiServer = new APIServer(vpinCalc, regimeDetector, oracleAggregator);
+    const apiServer = new APIServer(
+        vpinCalc,
+        regimeDetector,
+        oracleAggregator,
+        {
+            client: yellowClient,
+            getChannelId: () => channelId,
+            setChannelId: (nextChannelId: string) => {
+                channelId = nextChannelId;
+            },
+        },
+        stateBroadcaster,  // Pass broadcaster for trade→Yellow flow
+        gapAuction         // Pass gap auction service
+    );
     const httpServer = http.createServer((req, res) => {
         // @ts-ignore - access private method for now
         apiServer['handleRequest'](req, res);

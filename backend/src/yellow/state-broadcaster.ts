@@ -254,7 +254,10 @@ export class StateBroadcaster {
     }
 
     /**
-     * Send state update via Yellow Network
+     * Send state update via Yellow Network (simple mode - broadcasting state to other participants).
+     * 
+     * For now, we log the state locally and expose via API.
+     * Full signed state channel messages require deeper Nitrolite integration.
      */
     private async sendStateUpdate(update: StateUpdate): Promise<void> {
         if (!this.client.connected || !this.client.authenticated) {
@@ -262,21 +265,24 @@ export class StateBroadcaster {
             return;
         }
 
-        // For now, we'll use a simple JSON-RPC message
-        // In production, this would use signed state channel updates
-        const message = JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'state_update',
-            params: update,
-            id: Date.now(),
-        });
-
         try {
-            this.client.send(message);
+            // For demo purposes: log the state update locally
+            // Production: sign and send via Yellow's state channel protocol
+            console.log(`📤 State update queued: VPIN=${update.vpin.toFixed(3)}, Regime=${update.regime}, Fee=${update.recommendedFee}bps`);
+            
+            // Store last state for API queries
+            this.lastBroadcastedState = update;
+            this.lastBroadcastTime = Date.now();
         } catch (error) {
-            console.error('❌ Failed to send state update:', error);
+            console.error('❌ Failed to process state update:', error);
         }
     }
+
+    private lastBroadcastedState: StateUpdate | null = null;
+    private lastBroadcastTime = 0;
+
+    /** Monotonically increasing turn number for state channel ordering */
+    private turnNumber = 1;
 
     /**
      * Get current state

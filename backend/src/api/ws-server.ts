@@ -341,6 +341,7 @@ export class WSServer {
         }
 
         if (level !== this.lastCircuitBreakerLevel) {
+            const previousLevel = this.lastCircuitBreakerLevel;
             this.lastCircuitBreakerLevel = level;
 
             const message: WSMessage = {
@@ -348,7 +349,7 @@ export class WSServer {
                 data: {
                     level,
                     flags,
-                    previousLevel: this.lastCircuitBreakerLevel,
+                    previousLevel,
                 },
                 timestamp: Date.now(),
             };

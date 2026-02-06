@@ -7,6 +7,8 @@
 
 import { Certificate, AuctionPhase, GapAuctionState, Bid } from './types';
 import { createHash } from 'crypto';
+import { privateKeyToAccount } from 'viem/accounts';
+import { keccak256, encodePacked, toHex } from 'viem';
 
 export interface GapAuctionConfig {
     minGapPercent: number;          // Minimum gap to trigger auction (default: 0.5%)
@@ -172,28 +174,58 @@ export class GapAuctionService {
     }
 
     /**
-     * Generate certificate for winning bid
+     * Generate certificate for winning bid.
+     * Signs the certificate using the operator's private key so the
+     * on-chain GapAuction / MarginVault contract can verify authenticity.
      */
-    generateCertificate(
+    async generateCertificate(
         auctionId: string,
         poolId: string,
         validAfterBlock: bigint,
         validUntilBlock: bigint
-    ): Certificate | null {
+    ): Promise<Certificate | null> {
         const winner = this.getWinner(auctionId);
         if (!winner) {
             return null;
         }
 
-        // In production, this would be signed by the ClearNode
+        const nonce = BigInt(Date.now());
+
+        // Build deterministic message hash matching the on-chain verification
+        const messageHash = keccak256(
+            encodePacked(
+                ['string', 'address', 'uint256', 'uint256', 'uint256', 'uint256'],
+                [
+                    poolId,
+                    winner.bidder as `0x${string}`,
+                    winner.amount,
+                    validAfterBlock,
+                    validUntilBlock,
+                    nonce,
+                ]
+            )
+        );
+
+        // Sign with operator key (falls back to dummy if no key configured)
+        let signature: string;
+        const pk = process.env.PRIVATE_KEY;
+        if (pk) {
+            const account = privateKeyToAccount(pk as `0x${string}`);
+            signature = await account.signMessage({ message: { raw: messageHash as `0x${string}` } });
+        } else {
+            // Deterministic placeholder when running without a key (unit tests)
+            signature = '0x' + 'ab'.repeat(65);
+            console.warn('⚠️  No PRIVATE_KEY – certificate signed with placeholder');
+        }
+
         const certificate: Certificate = {
             poolId,
             bidder: winner.bidder,
             bidAmount: winner.amount,
             validAfterBlock,
             validUntilBlock,
-            nonce: BigInt(Date.now()),
-            signature: '0x' + '00'.repeat(65), // Placeholder signature
+            nonce,
+            signature,
         };
 
         return certificate;

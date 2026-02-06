@@ -197,7 +197,7 @@ async function main() {
             console.log(`   ✓ Winner: ${winner.bidder.slice(0, 10)}...`);
             console.log(`   ✓ Winning bid: ${winner.amount}`);
 
-            const cert = gapAuction.generateCertificate(auctionId, 'pool-test', 1000n, 1100n);
+            const cert = await gapAuction.generateCertificate(auctionId, 'pool-test', 1000n, 1100n);
             if (cert) {
                 console.log(`   ✓ Certificate generated`);
             }

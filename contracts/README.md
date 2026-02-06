@@ -107,10 +107,10 @@ forge script script/Deploy.s.sol:DeployStockShield --rpc-url <your_rpc_url> --pr
 |----------|---------|
 | **PoolManager** (Uniswap V4) | `0xE03A1074c86CFeDd5C142C4F04F1a1536e203543` |
 | **RegimeOracle** | `0xCC46a9e6FFB834a7a1C126f9D4e803bF418CccA6` |
-| **StockShieldHook** | `0x9F724ceb362016f8B4B93A96EF93Ce8AdEfc3ac0` |
-| **GapAuction** | `0x0bb31dd5939c625b70a3c209c3B278EacA202a02` |
-| **MarginVault** | `0x609819C1e511B1537F1603f8eDdA622C05E59929` |
-| **DynamicFeeSetup** | `0xfFe3553B6142A6E95e51bfaD727cDECB18393418` |
+| **StockShieldHook** | `0x70FC6bDE4c265bd00b6fC75A8582f8cD90307Ac0` |
+| **GapAuction** | `0x77A0bC2C6F53B55025924DaC173a3F92777dade5` |
+| **MarginVault** | `0x7cA67B708B29a019F52576896Ff86b3Adf7b8Ca5` |
+| **DynamicFeeSetup** | `0x669D676703ebF28769bc863E089fCF0C36bB3D90` |
 
 **Deployed:** February 6, 2026 | **Chain ID:** 11155111
 
@@ -120,12 +120,12 @@ All tokens have a public `faucet()` function for testing:
 
 | Token | Symbol | Address |
 |-------|--------|---------|
-| **Mock USDC** | USDC | `0xc9b62Ff3Ca454a31f7107EDc5CA013c713f5eA4B` |
-| **Tokenized Apple** | tAAPL | `0xA7c512e81963a4907AF5729EabC4Ddf321205Cde` |
-| **Tokenized Tesla** | tTSLA | `0xb6Df0585Fa15bfa0c942D8C175532CDbc3104fb3` |
-| **Tokenized NVIDIA** | tNVDA | `0x372712995Fc96F259dE6E1A6f74F06B10E6A6063` |
-| **Tokenized Google** | tGOOGL | `0xBe88F14d6993057D8048cCdfde5981dab34d05f0` |
-| **Tokenized Microsoft** | tMSFT | `0x1C1C3974d35304396cDD93136bfAD06b13E65AB3` |
+| **Mock USDC** | USDC | `0xE7963ce0b7EFEAF47b64B06545304f10Ff24Fe70` |
+| **Tokenized Apple** | tAAPL | `0x7D5A3d5C66a4422E3AFf7860e3bE709585068298` |
+| **Tokenized Tesla** | tTSLA | `0x9935de3B97C2154e5dF32C9D2FEcA276e9f30896` |
+| **Tokenized NVIDIA** | tNVDA | `0xC836831e6e72D9C98e46799C830C2Ac75daC2471` |
+| **Tokenized Google** | tGOOGL | `0x21Fbe2d4f6c87315381176B14B99a36276DE971f` |
+| **Tokenized Microsoft** | tMSFT | `0x4BefeAeBba1EefA79748146eCc9c2204613e3CbB` |
 
 ## Documentation
 

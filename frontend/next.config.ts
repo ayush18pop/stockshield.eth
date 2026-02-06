@@ -40,6 +40,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Fix WalletConnect localStorage SSR issue
+  serverExternalPackages: [
+    "pino",
+    "pino-pretty",
+    "thread-stream",
+    "@walletconnect/universal-provider",
+    "@walletconnect/ethereum-provider",
+  ],
   experimental: {
     // Optimize package imports for smaller bundles
     optimizePackageImports: ['lucide-react', 'framer-motion'],

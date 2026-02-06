@@ -35,8 +35,9 @@ const DEFAULT_CONFIG: VPINConfig = {
     bucketSizeRatio: 50,        // Bucket = ADV / 50 (2% of daily volume)
     numBuckets: 50,             // 50-bucket rolling window
     advLookbackDays: 20,        // 20-day ADV
-    minBucketSize: 10_000,      // $10k minimum
-    maxBucketSize: 1_000_000,   // $1M maximum
+    // Keep buckets tiny so VPIN reacts quickly in low-volume demo; force size to $5
+    minBucketSize: 5,           // $5 minimum
+    maxBucketSize: 5,           // $5 maximum (lock bucket size)
 };
 
 export class VPINCalculator {

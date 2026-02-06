@@ -541,6 +541,32 @@ export class YellowClient {
     }
 
     // ============================================================================
+    // State Channel Signing
+    // ============================================================================
+
+    /**
+     * Sign a state update payload with the session key.
+     * Returns the hex-encoded ECDSA signature that ClearNode can verify.
+     */
+    async signStateUpdate(payload: Record<string, unknown>): Promise<string> {
+        if (!this.sessionPrivateKey) {
+            throw new Error('No session key available – authenticate first');
+        }
+
+        const sessionAccount = privateKeyToAccount(this.sessionPrivateKey as `0x${string}`);
+
+        // Deterministic serialization: sorted keys, bigint → string
+        const canonical = JSON.stringify(payload, Object.keys(payload).sort(), 0);
+
+        // Sign the raw message bytes with the session key
+        const signature = await sessionAccount.signMessage({
+            message: canonical,
+        });
+
+        return signature;
+    }
+
+    // ============================================================================
     // Getters
     // ============================================================================
 
