@@ -27,16 +27,16 @@
 
 ## � Deployment & Transaction IDs
 
-**Live Testnet Deployments:**
+**Live Testnet Deployments (Sepolia):**
 
 | Contract | Transaction ID |
 |----------|----------------|
-| **Pool Initialization** | [`0x6beee6369fd31987a85509bb9418b88b86b5f06f81f1043ea25c0fdd547ac4f1`](https://etherscan.io/tx/0x6beee6369fd31987a85509bb9418b88b86b5f06f81f1043ea25c0fdd547ac4f1) |
-| **Liquidity Addition** | [`0x87c7e3ffff53a2610399cce9733cec396947fac94ea759dfc8cf6d64f4096b62`](https://etherscan.io/tx/0x87c7e3ffff53a2610399cce9733cec396947fac94ea759dfc8cf6d64f4096b62) |
-| **Execute Transaction 1** | [`0xb5238e8b4613c3fd1b79c298e34b83f0fe997fe3c8a4cb8f7a41c7909887aa77`](https://etherscan.io/tx/0xb5238e8b4613c3fd1b79c298e34b83f0fe997fe3c8a4cb8f7a41c7909887aa77) |
-| **Execute Transaction 2** | [`0x2d7a9de4a38d264a2f44b526510f2020286fec298d8832ae405e8edd7478be5f`](https://etherscan.io/tx/0x2d7a9de4a38d264a2f44b526510f2020286fec298d8832ae405e8edd7478be5f) |
+| **Pool Initialization** | [`0x6beee6369fd31987a85509bb9418b88b86b5f06f81f1043ea25c0fdd547ac4f1`](https://sepolia.etherscan.io/tx/0x6beee6369fd31987a85509bb9418b88b86b5f06f81f1043ea25c0fdd547ac4f1) |
+| **Liquidity Addition** | [`0x87c7e3ffff53a2610399cce9733cec396947fac94ea759dfc8cf6d64f4096b62`](https://sepolia.etherscan.io/tx/0x87c7e3ffff53a2610399cce9733cec396947fac94ea759dfc8cf6d64f4096b62) |
+| **Execute Transaction 1** | [`0xb5238e8b4613c3fd1b79c298e34b83f0fe997fe3c8a4cb8f7a41c7909887aa77`](https://sepolia.etherscan.io/tx/0xb5238e8b4613c3fd1b79c298e34b83f0fe997fe3c8a4cb8f7a41c7909887aa77) |
+| **Execute Transaction 2** | [`0x2d7a9de4a38d264a2f44b526510f2020286fec298d8832ae405e8edd7478be5f`](https://sepolia.etherscan.io/tx/0x2d7a9de4a38d264a2f44b526510f2020286fec298d8832ae405e8edd7478be5f) |
 
-✅ **All contracts deployed and verified on testnet** — Click transaction IDs above to view on block explorer.
+✅ **All contracts deployed and verified on Sepolia testnet** — Click transaction IDs above to view on Sepolia block explorer.
 
 ---
 
