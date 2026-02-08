@@ -70,7 +70,7 @@ contract CreatePoolOnly is Script {
         } else {
             // Stock is currency0, USDC is currency1
             // price = 10^-12, sqrt = 10^-6, * 2^96
-            sqrtPriceX96 = uint160((2**96) / 1e6);
+            sqrtPriceX96 = uint160(uint256(2**96) / 1e6);
         }
         console2.log("  sqrtPriceX96:", uint256(sqrtPriceX96));
 

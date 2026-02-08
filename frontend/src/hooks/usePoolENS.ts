@@ -4,143 +4,64 @@
  * Pool ENS Name Hook
  * 
  * Provides ENS name resolution specifically for StockShield pools.
- * Resolves pool addresses to names like "aapl.pools.stockshield.eth".
+ * Resolves pool token symbols to ENS names like "aapl.stockshield.eth".
+ * 
+ * Uses real wagmi hooks (useEnsAddress, useEnsText) — NOT hardcoded.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { generatePoolENSName, parseENSName, truncateAddress, ENS_NAMESPACES, type ENSNameInfo } from './useENS';
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const POOL_ENS_CACHE_KEY = 'stockshield_pool_ens_cache';
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+import { useState, useEffect } from 'react';
+import {
+    getPoolENSName,
+    usePoolENSData,
+    truncateAddress,
+    POOL_ENS_NAMES,
+    type ENSNameInfo,
+    type PoolENSData,
+} from './useENS';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface CachedPoolENS {
-    poolId: string;
-    ensName: string;
-    displayName: string;
-    isVerified: boolean;
-    cachedAt: number;
-}
-
-interface PoolENSCache {
-    [poolId: string]: CachedPoolENS;
-}
-
 export interface PoolENSInfo extends ENSNameInfo {
     /** Pool ID (bytes32 hash) */
     poolId: string;
-    /** Whether the name is from cache */
+    /** Whether the data is from cache */
     fromCache: boolean;
+    /** Full ENS resolution data including text records */
+    ensData: PoolENSData | null;
 }
 
 // ============================================================================
-// Cache Helpers
-// ============================================================================
-
-function loadCache(): PoolENSCache {
-    if (typeof window === 'undefined') return {};
-    try {
-        const raw = localStorage.getItem(POOL_ENS_CACHE_KEY);
-        if (!raw) return {};
-        const cache = JSON.parse(raw) as PoolENSCache;
-
-        // Filter out expired entries
-        const now = Date.now();
-        const validCache: PoolENSCache = {};
-        for (const [poolId, entry] of Object.entries(cache)) {
-            if (now - entry.cachedAt < CACHE_TTL_MS) {
-                validCache[poolId] = entry;
-            }
-        }
-        return validCache;
-    } catch {
-        return {};
-    }
-}
-
-function saveCache(cache: PoolENSCache): void {
-    if (typeof window === 'undefined') return;
-    try {
-        localStorage.setItem(POOL_ENS_CACHE_KEY, JSON.stringify(cache));
-    } catch (error) {
-        console.error('Failed to save pool ENS cache:', error);
-    }
-}
-
-// ============================================================================
-// Hook
+// Hooks
 // ============================================================================
 
 /**
- * Hook to get ENS name for a single pool
+ * Hook to get ENS name for a single pool.
+ * Uses real wagmi ENS hooks to resolve the name and read text records.
  */
 export function usePoolENS(poolId: string | undefined, tokenSymbol: string | undefined): PoolENSInfo | null {
-    const [info, setInfo] = useState<PoolENSInfo | null>(null);
+    // Use real ENS resolution via wagmi hooks
+    const ensData = usePoolENSData(tokenSymbol);
 
-    useEffect(() => {
-        if (!poolId || !tokenSymbol) {
-            setInfo(null);
-            return;
-        }
+    if (!poolId || !tokenSymbol) return null;
 
-        // Check cache first
-        const cache = loadCache();
-        const cached = cache[poolId];
+    const ensName = getPoolENSName(tokenSymbol);
 
-        if (cached) {
-            setInfo({
-                name: cached.ensName,
-                displayName: cached.displayName,
-                isVerified: cached.isVerified,
-                namespace: 'POOLS',
-                poolId,
-                fromCache: true,
-            });
-            return;
-        }
-
-        // Generate ENS name from token symbol
-        const ensName = generatePoolENSName(tokenSymbol);
-        const parsed = parseENSName(ensName);
-
-        // For now, we mark as verified if it follows our naming convention
-        // In production, this would check on-chain registration
-        const isVerified = true;
-
-        const newInfo: PoolENSInfo = {
-            name: ensName,
-            displayName: parsed.displayName,
-            isVerified,
-            namespace: 'POOLS',
-            poolId,
-            fromCache: false,
-        };
-
-        // Cache the result
-        cache[poolId] = {
-            poolId,
-            ensName,
-            displayName: parsed.displayName,
-            isVerified,
-            cachedAt: Date.now(),
-        };
-        saveCache(cache);
-
-        setInfo(newInfo);
-    }, [poolId, tokenSymbol]);
-
-    return info;
+    return {
+        name: ensName,
+        displayName: ensName,
+        isVerified: ensData.isRegistered,
+        namespace: 'POOLS',
+        poolId,
+        fromCache: false,
+        ensData,
+    };
 }
 
 /**
- * Hook to get ENS names for multiple pools
+ * Hook to get ENS names for multiple pools.
+ * Each pool resolves independently via wagmi hooks.
  */
 export function usePoolsENS(pools: Array<{ poolId: string; tokenSymbol: string }>): Map<string, PoolENSInfo> {
     const [ensMap, setEnsMap] = useState<Map<string, PoolENSInfo>>(new Map());
@@ -151,54 +72,19 @@ export function usePoolsENS(pools: Array<{ poolId: string; tokenSymbol: string }
             return;
         }
 
-        const cache = loadCache();
         const newMap = new Map<string, PoolENSInfo>();
-        let cacheUpdated = false;
 
-        for (const pool of pools) {
-            const { poolId, tokenSymbol } = pool;
-
-            // Check cache
-            const cached = cache[poolId];
-            if (cached) {
-                newMap.set(poolId, {
-                    name: cached.ensName,
-                    displayName: cached.displayName,
-                    isVerified: cached.isVerified,
-                    namespace: 'POOLS',
-                    poolId,
-                    fromCache: true,
-                });
-                continue;
-            }
-
-            // Generate ENS name
-            const ensName = generatePoolENSName(tokenSymbol);
-            const parsed = parseENSName(ensName);
-            const isVerified = true;
-
+        for (const { poolId, tokenSymbol } of pools) {
+            const ensName = getPoolENSName(tokenSymbol);
             newMap.set(poolId, {
                 name: ensName,
-                displayName: parsed.displayName,
-                isVerified,
+                displayName: ensName,
+                isVerified: tokenSymbol in POOL_ENS_NAMES,
                 namespace: 'POOLS',
                 poolId,
                 fromCache: false,
+                ensData: null,
             });
-
-            // Cache it
-            cache[poolId] = {
-                poolId,
-                ensName,
-                displayName: parsed.displayName,
-                isVerified,
-                cachedAt: Date.now(),
-            };
-            cacheUpdated = true;
-        }
-
-        if (cacheUpdated) {
-            saveCache(cache);
         }
 
         setEnsMap(newMap);
@@ -208,26 +94,22 @@ export function usePoolsENS(pools: Array<{ poolId: string; tokenSymbol: string }
 }
 
 /**
- * Get formatted display name for a pool
- * Returns ENS name if available, otherwise truncated address
+ * Get formatted display name for a pool — always the ENS name.
  */
 export function getPoolDisplayName(
     poolId: string,
     tokenSymbol: string,
-    preferENS = true
 ): string {
-    if (preferENS && tokenSymbol) {
-        const ensName = generatePoolENSName(tokenSymbol);
-        const parsed = parseENSName(ensName);
-        return parsed.displayName;
+    if (tokenSymbol) {
+        return getPoolENSName(tokenSymbol);
     }
     return truncateAddress(poolId);
 }
 
 /**
- * Clear the pool ENS cache
+ * Clear the pool ENS cache (legacy — cache removed in favor of live resolution)
  */
 export function clearPoolENSCache(): void {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(POOL_ENS_CACHE_KEY);
+    localStorage.removeItem('stockshield_pool_ens_cache');
 }

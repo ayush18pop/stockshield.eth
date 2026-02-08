@@ -94,6 +94,14 @@ interface AutoSettleEvent {
     signature: string;
 }
 
+interface AutoSessionEvent {
+    type: 'started' | 'settled';
+    channelId: string;
+    sessionId: string;
+    at: number;
+    reason?: string;
+}
+
 // ============================================================================
 // API Server
 // ============================================================================
@@ -130,12 +138,34 @@ export class APIServer {
     private autoSettleActivity: Map<string, AutoSettleActivity> = new Map();
     private lastAutoSettleEvent: AutoSettleEvent | null = null;
     private lastAutoSettleError: string | null = null;
+    private autoSessionEnabled = (process.env.YELLOW_AUTO_SESSION_ENABLED ?? 'true') === 'true';
+    private autoSessionIntervalMs = Math.max(
+        5,
+        Number(process.env.YELLOW_AUTO_SESSION_INTERVAL_SECONDS ?? '60')
+    ) * 1000;
+    private autoSessionDurationMs = Math.max(
+        5,
+        Number(process.env.YELLOW_AUTO_SESSION_DURATION_SECONDS ?? '60')
+    ) * 1000;
+    private autoSessionAllowance = Math.max(
+        0,
+        Number(process.env.YELLOW_AUTO_SESSION_ALLOWANCE ?? '25')
+    );
+    private autoSessionTimer: NodeJS.Timeout | null = null;
+    private autoSessionSettleTimer: NodeJS.Timeout | null = null;
+    private autoSessionInFlight = false;
+    private autoSessionScheduledAt: number | null = null;
+    private autoSessionSettlesAt: number | null = null;
+    private lastAutoSessionEvent: AutoSessionEvent | null = null;
+    private lastAutoSessionError: string | null = null;
 
     // Mock data for demo (since contracts aren't deployed)
     private mockPools: PoolInfo[] = [
-        { poolId: '0xaapl', asset: 'AAPL', liquidity: '1000000', vpin: 0.35, fee: 15, regime: Regime.CORE_SESSION, ensName: 'aapl.pools.stockshield.eth' },
-        { poolId: '0xtsla', asset: 'TSLA', liquidity: '750000', vpin: 0.42, fee: 22, regime: Regime.CORE_SESSION, ensName: 'tsla.pools.stockshield.eth' },
-        { poolId: '0xeth', asset: 'ETH', liquidity: '2500000', vpin: 0.28, fee: 12, regime: Regime.CORE_SESSION, ensName: 'eth.pools.stockshield.eth' },
+        { poolId: '0xaapl', asset: 'AAPL', liquidity: '1000000', vpin: 0.35, fee: 15, regime: Regime.CORE_SESSION, ensName: 'aapl.stockshield.eth' },
+        { poolId: '0xtsla', asset: 'TSLA', liquidity: '750000', vpin: 0.42, fee: 22, regime: Regime.CORE_SESSION, ensName: 'tsla.stockshield.eth' },
+        { poolId: '0xnvda', asset: 'NVDA', liquidity: '2000000', vpin: 0.31, fee: 14, regime: Regime.CORE_SESSION, ensName: 'nvda.stockshield.eth' },
+        { poolId: '0xgoogl', asset: 'GOOGL', liquidity: '1800000', vpin: 0.29, fee: 13, regime: Regime.CORE_SESSION, ensName: 'googl.stockshield.eth' },
+        { poolId: '0xmsft', asset: 'MSFT', liquidity: '2200000', vpin: 0.27, fee: 12, regime: Regime.CORE_SESSION, ensName: 'msft.stockshield.eth' },
     ];
 
     constructor(
@@ -150,6 +180,7 @@ export class APIServer {
         this.regimeDetector = regimeDetector;
         this.oracleAggregator = oracleAggregator;
         this.yellow = yellow;
+        this.startAutoSessionLoop();
     }
 
     /**
@@ -180,6 +211,14 @@ export class APIServer {
             }
             this.autoSettleTimers.clear();
             this.autoSettleActivity.clear();
+            if (this.autoSessionTimer) {
+                clearInterval(this.autoSessionTimer);
+                this.autoSessionTimer = null;
+            }
+            if (this.autoSessionSettleTimer) {
+                clearTimeout(this.autoSessionSettleTimer);
+                this.autoSessionSettleTimer = null;
+            }
 
             if (this.server) {
                 this.server.close(() => {
@@ -751,11 +790,110 @@ export class APIServer {
         };
     }
 
+    private getAutoSessionStatus() {
+        return {
+            enabled: this.autoSessionEnabled,
+            intervalSeconds: Math.floor(this.autoSessionIntervalMs / 1000),
+            durationSeconds: Math.floor(this.autoSessionDurationMs / 1000),
+            allowance: this.autoSessionAllowance,
+            active: this.yellowSession?.status === 'ACTIVE',
+            sessionId: this.yellowSession?.sessionId ?? null,
+            channelId: this.yellowSession?.channelId ?? null,
+            scheduledAt: this.autoSessionScheduledAt,
+            settlesAt: this.autoSessionSettlesAt,
+            lastEvent: this.lastAutoSessionEvent,
+            lastError: this.lastAutoSessionError,
+        };
+    }
+
+    private startAutoSessionLoop(): void {
+        if (!this.autoSessionEnabled || this.autoSessionTimer) return;
+        this.autoSessionTimer = setInterval(() => {
+            void this.ensureAutoSession();
+        }, this.autoSessionIntervalMs);
+        void this.ensureAutoSession();
+    }
+
+    private scheduleAutoSessionSettle(channelId: string): void {
+        if (this.autoSessionSettleTimer) {
+            clearTimeout(this.autoSessionSettleTimer);
+        }
+        this.autoSessionScheduledAt = Date.now();
+        this.autoSessionSettlesAt = this.autoSessionScheduledAt + this.autoSessionDurationMs;
+        this.autoSessionSettleTimer = setTimeout(() => {
+            void this.tryAutoSessionSettle(channelId, 'auto_timeout');
+        }, this.autoSessionDurationMs);
+    }
+
+    private async tryAutoSessionSettle(channelId: string, reason: string): Promise<void> {
+        if (!this.yellowSession || this.yellowSession.status !== 'ACTIVE') return;
+        if (this.yellowSession.channelId !== channelId) return;
+        try {
+            await this.finalizeYellowSession(channelId, reason);
+            if (this.autoSessionSettleTimer) {
+                clearTimeout(this.autoSessionSettleTimer);
+                this.autoSessionSettleTimer = null;
+            }
+            this.autoSessionScheduledAt = null;
+            this.autoSessionSettlesAt = null;
+        } catch (error) {
+            this.lastAutoSessionError = error instanceof Error ? error.message : 'Auto session settle failed';
+        }
+    }
+
+    private async ensureAutoSession(): Promise<void> {
+        if (this.autoSessionInFlight) return;
+        this.autoSessionInFlight = true;
+        try {
+            const runtime = this.getYellowRuntimeStatus();
+            if (!this.yellow || !runtime.connected || !runtime.authenticated) {
+                this.lastAutoSessionError = 'Auto session skipped: Yellow client not connected/authenticated';
+                return;
+            }
+
+            if (this.yellowSession?.status === 'ACTIVE') {
+                await this.finalizeYellowSession(this.yellowSession.channelId ?? '', 'auto_rotate');
+            }
+
+            const channelId = await this.yellow.client.createChannel();
+            this.yellow.setChannelId(channelId);
+            const now = Date.now();
+
+            this.yellowSession = {
+                sessionId: randomUUID(),
+                wallet: 'auto',
+                status: 'ACTIVE',
+                allowance: this.autoSessionAllowance,
+                spent: 0,
+                remaining: this.autoSessionAllowance,
+                txCount: 0,
+                startedAt: now,
+                updatedAt: now,
+                channelId,
+                txLog: [],
+            };
+
+            this.lastAutoSessionEvent = {
+                type: 'started',
+                channelId,
+                sessionId: this.yellowSession.sessionId,
+                at: now,
+            };
+            this.lastAutoSessionError = null;
+            this.scheduleAutoSessionSettle(channelId);
+        } catch (error) {
+            this.lastAutoSessionError = error instanceof Error ? error.message : 'Auto session create failed';
+        } finally {
+            this.autoSessionInFlight = false;
+        }
+    }
+
     private handleYellowAutoSettleStatus(res: http.ServerResponse): void {
         res.writeHead(200);
         res.end(
             JSON.stringify({
                 autoSettle: this.getAutoSettleStatus(),
+                autoSession: this.getAutoSessionStatus(),
                 timestamp: Date.now(),
             })
         );
@@ -1046,6 +1184,7 @@ export class APIServer {
             session: this.yellowSession,
             signer: this.getTradeSignerAddress(),
             autoSettle: this.getAutoSettleStatus(),
+            autoSession: this.getAutoSessionStatus(),
             timestamp: Date.now(),
         };
         res.writeHead(200);
@@ -1211,45 +1350,10 @@ export class APIServer {
         const channelId =
             /^0x[a-fA-F0-9]{64}$/.test(channelIdCandidate) ? channelIdCandidate : null;
 
-        // ============================================================
-        // REAL YELLOW SDK INTEGRATION: Close channel with ClearNode
-        // ============================================================
-        let finalStateHash: string | null = null;
-        let closeSignature: string | null = null;
-
-        if (this.yellow?.client && channelId) {
-            try {
-                // Create final state for settlement
-                const finalState = {
-                    channelId,
-                    finalTurnNum: this.yellowSession.txCount,
-                    totalSpent: this.yellowSession.spent,
-                    totalRemaining: this.yellowSession.remaining,
-                    txCount: this.yellowSession.txCount,
-                    settledAt: Date.now(),
-                };
-
-                // Sign final state
-                closeSignature = await this.yellow.client.signStateUpdate(finalState);
-                finalStateHash = `0x${Buffer.from(JSON.stringify(finalState)).toString('hex').slice(0, 64).padEnd(64, '0')}`;
-
-                // Close channel with ClearNode
-                await this.yellow.client.closeChannel(channelId);
-                console.log(`📦 Channel ${channelId.slice(0, 10)}... closed with ClearNode`);
-
-                // Clear the stored channel ID after closing
-                this.yellow.setChannelId('');
-                const pendingTimer = this.autoSettleTimers.get(channelId);
-                if (pendingTimer) clearTimeout(pendingTimer);
-                this.autoSettleTimers.delete(channelId);
-                this.autoSettleActivity.delete(channelId);
-            } catch (err) {
-                console.warn('⚠️ ClearNode channel close failed (continuing):', err);
-            }
-        }
-
-        this.yellowSession.status = 'SETTLED';
-        this.yellowSession.updatedAt = Date.now();
+        const { finalStateHash, closeSignature } = await this.finalizeYellowSession(
+            channelId ?? '',
+            'manual_settle'
+        );
 
         res.writeHead(200);
         res.end(JSON.stringify({
@@ -1276,6 +1380,65 @@ export class APIServer {
                 },
             timestamp: Date.now(),
         }));
+    }
+
+    private async finalizeYellowSession(
+        channelId: string,
+        reason: string
+    ): Promise<{ finalStateHash: string | null; closeSignature: string | null }> {
+        if (!this.yellowSession || this.yellowSession.status !== 'ACTIVE') {
+            return { finalStateHash: null, closeSignature: null };
+        }
+
+        const isValidChannel = /^0x[a-fA-F0-9]{64}$/.test(channelId);
+        const resolvedChannelId = isValidChannel ? channelId : this.yellowSession.channelId ?? '';
+
+        let finalStateHash: string | null = null;
+        let closeSignature: string | null = null;
+
+        if (this.yellow?.client && resolvedChannelId) {
+            try {
+                if (!this.yellow.client.getChannel(resolvedChannelId)) {
+                    console.warn(`⚠️ ClearNode channel not found locally: ${resolvedChannelId.slice(0, 10)}... (skip close)`);
+                } else {
+                const finalState = {
+                    channelId: resolvedChannelId,
+                    finalTurnNum: this.yellowSession.txCount,
+                    totalSpent: this.yellowSession.spent,
+                    totalRemaining: this.yellowSession.remaining,
+                    txCount: this.yellowSession.txCount,
+                    settledAt: Date.now(),
+                    reason,
+                };
+
+                closeSignature = await this.yellow.client.signStateUpdate(finalState);
+                finalStateHash = `0x${Buffer.from(JSON.stringify(finalState)).toString('hex').slice(0, 64).padEnd(64, '0')}`;
+
+                await this.yellow.client.closeChannel(resolvedChannelId);
+                console.log(`📦 Channel ${resolvedChannelId.slice(0, 10)}... closed with ClearNode`);
+                }
+
+                this.yellow.setChannelId('');
+                const pendingTimer = this.autoSettleTimers.get(resolvedChannelId);
+                if (pendingTimer) clearTimeout(pendingTimer);
+                this.autoSettleTimers.delete(resolvedChannelId);
+                this.autoSettleActivity.delete(resolvedChannelId);
+            } catch (err) {
+                console.warn('⚠️ ClearNode channel close failed (continuing):', err);
+            }
+        }
+
+        this.yellowSession.status = 'SETTLED';
+        this.yellowSession.updatedAt = Date.now();
+        this.lastAutoSessionEvent = {
+            type: 'settled',
+            channelId: resolvedChannelId,
+            sessionId: this.yellowSession.sessionId,
+            at: Date.now(),
+            reason,
+        };
+
+        return { finalStateHash, closeSignature };
     }
 
     // ========================================================================

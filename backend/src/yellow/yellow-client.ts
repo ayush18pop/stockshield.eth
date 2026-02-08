@@ -422,6 +422,11 @@ export class YellowClient {
             throw new Error('Not authenticated');
         }
 
+        if (!this.channels.has(channelId)) {
+            console.warn(`⚠️  Skip close: channel not tracked locally (${channelId.slice(0, 10)}...)`);
+            return;
+        }
+
         console.log(`🔒 Closing channel ${channelId}...`);
 
         const sessionSigner = this.sessionSigner;
@@ -453,8 +458,19 @@ export class YellowClient {
                     this.messageHandlers.delete('close_channel');
                     resolve();
                 } else if (msg.type === 'error') {
+                    const errorMessage = typeof msg.error === 'string' ? msg.error : 'Unknown close error';
+                    if (errorMessage.includes('not found')) {
+                        console.warn(`⚠️  ClearNode reports channel not found (${channelId.slice(0, 10)}...). Treating as closed.`);
+                        const channel = this.channels.get(channelId);
+                        if (channel) {
+                            channel.status = ChannelStatus.CLOSED;
+                        }
+                        this.messageHandlers.delete('close_channel');
+                        resolve();
+                        return;
+                    }
                     this.messageHandlers.delete('close_channel');
-                    reject(new Error(`Close error: ${msg.error}`));
+                    reject(new Error(`Close error: ${errorMessage}`));
                 }
             };
 

@@ -125,7 +125,7 @@ contract CreatePoolWithLiquidity is Script {
             sqrtPriceX96 = uint160(1e6 * (2**96));
         } else {
             // Stock is currency0
-            sqrtPriceX96 = uint160((2**96) / 1e6);
+            sqrtPriceX96 = uint160(uint256(2**96) / 1e6);
         }
 
         // Liquidity parameters

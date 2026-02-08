@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
-    Shield, TrendingUp, Plus, Search, Wallet, RefreshCw, Loader2
+    Shield, TrendingUp, Plus, Search, Wallet, RefreshCw, Loader2, Globe
 } from 'lucide-react';
 import { DotMatrix } from '@/components/ui/dot-matrix';
 import { LiquidityModal } from '@/components/LiquidityModal';
@@ -14,6 +14,7 @@ import { usePoolDiscovery, PoolInfo } from '@/hooks/usePoolDiscovery';
 import { useAccount } from 'wagmi';
 import { CONTRACTS, MOCK_TOKENS } from '@/lib/contracts';
 import { PoolNameBadge } from '@/components/PoolNameDisplay';
+import { getPoolENSName, ENS_ROOT } from '@/hooks/useENS';
 
 // ============================================================================
 // MAIN POOLS PAGE
@@ -203,9 +204,8 @@ export default function PoolsPage() {
                         <table className="w-full">
                             <thead className="border-b border-white/5">
                                 <tr className="text-left text-sm text-neutral-500">
-                                    <th className="px-6 py-4 font-medium">Pool</th>
-                                    <th className="px-6 py-4 font-medium">ENS Name</th>
-                                    <th className="px-6 py-4 font-medium">Pool Balances</th>
+                                    <th className="px-6 py-4 font-medium">Pool (ENS)</th>
+
                                     <th className="px-6 py-4 font-medium">Liquidity (raw)</th>
                                     <th className="px-6 py-4 font-medium">Tick</th>
                                     <th className="px-6 py-4 font-medium">Protection</th>
@@ -214,6 +214,7 @@ export default function PoolsPage() {
                             </thead>
                             <tbody>
                                 {filteredPools.map((pool) => {
+                                    const ensName = getPoolENSName(pool.tokenSymbol);
                                     return (
                                         <tr key={pool.poolId} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
                                             <td className="px-6 py-4">
@@ -227,25 +228,18 @@ export default function PoolsPage() {
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <p className="font-medium">{pool.name}</p>
-                                                        <p className="text-xs text-neutral-500">tick spacing: {CONTRACTS.TICK_SPACING}</p>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Globe size={14} className="text-[#5298FF]" />
+                                                            <p className="font-mono font-medium text-[#5298FF]">{ensName}</p>
+                                                        </div>
+                                                        <p className="text-xs text-neutral-500 mt-0.5">{pool.name} · tick spacing: {CONTRACTS.TICK_SPACING}</p>
+                                                        <code className="text-[10px] text-neutral-600 font-mono">
+                                                            {pool.poolId.slice(0, 10)}...{pool.poolId.slice(-6)}
+                                                        </code>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col gap-1">
-                                                    <PoolNameBadge poolId={pool.poolId} tokenSymbol={pool.tokenSymbol} />
-                                                    <code className="text-[10px] text-neutral-600 font-mono">
-                                                        {pool.poolId.slice(0, 10)}...{pool.poolId.slice(-6)}
-                                                    </code>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="space-y-1">
-                                                    <div className="text-sm text-neutral-400">Not available in current v4 view</div>
-                                                    <div className="text-xs text-neutral-600">Requires position indexer / per-tick accounting</div>
-                                                </div>
-                                            </td>
+
                                             <td className="px-6 py-4 font-mono">
                                                 <div className="text-white">{formatLiquidity(pool.liquidity)}</div>
                                                 <div className="text-xs text-neutral-600">raw liquidity units</div>

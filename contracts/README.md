@@ -114,6 +114,41 @@ forge script script/Deploy.s.sol:DeployStockShield --rpc-url <your_rpc_url> --pr
 
 **Deployed:** February 6, 2026 | **Chain ID:** 11155111
 
+### ENS Integration (Sepolia)
+
+StockShield uses the **Ethereum Name Service (ENS)** on Sepolia for pool discovery and metadata. Each trading pool has its own ENS subdomain with text records containing pool configuration.
+
+| ENS Name | Pool | Text Records |
+|----------|------|--------------|
+| **stockshield.eth** | Protocol Root | `description`, `url` |
+| **aapl.stockshield.eth** | AAPL/USDC Pool | `pool.hook`, `pool.token`, `pool.quote`, `pool.ticker`, `pool.exchange`, `pool.regime`, `pool.baseFee`, `description`, `url` |
+| **tsla.stockshield.eth** | TSLA/USDC Pool | _(same text records)_ |
+| **nvda.stockshield.eth** | NVDA/USDC Pool | _(same text records)_ |
+| **googl.stockshield.eth** | GOOGL/USDC Pool | _(same text records)_ |
+| **msft.stockshield.eth** | MSFT/USDC Pool | _(same text records)_ |
+
+**ENS Registry (Sepolia):** `0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e`  
+**Public Resolver:** `0x8FADE66B79cC9f707aB26799354482EB93a5B7dD`
+
+#### ENS Text Record Schema
+
+Each pool subdomain stores the following text records:
+
+```
+pool.hook        → StockShield hook contract address
+pool.token       → Stock token contract address (e.g., tAAPL)
+pool.quote       → Quote token address (USDC)
+pool.chainId     → Deployment chain ID (11155111)
+pool.ticker      → Stock ticker symbol (e.g., "AAPL")
+pool.exchange    → Source exchange (e.g., "NYSE")
+pool.regime      → Current market regime
+pool.baseFee     → Base fee in basis points
+description      → Human-readable pool description
+url              → Pool-specific URL (e.g., https://stockshield.xyz/pools/aapl)
+```
+
+Frontend integration uses **wagmi hooks** (`useEnsText`, `useEnsName`) to resolve pool metadata on-chain without hardcoded values.
+
 ### Mock Tokens (Sepolia Testnet)
 
 All tokens have a public `faucet()` function for testing:

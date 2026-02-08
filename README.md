@@ -25,9 +25,24 @@
 
 ---
 
-## 📖 Overview
+## � Deployment & Transaction IDs
 
-**StockShield** (also known as **AURA Protocol**) is a cutting-edge Uniswap v4 Hook designed to protect liquidity providers in **tokenized securities pools** from two critical attack vectors:
+**Live Testnet Deployments:**
+
+| Contract | Transaction ID |
+|----------|----------------|
+| **Pool Initialization** | [`0x6beee6369fd31987a85509bb9418b88b86b5f06f81f1043ea25c0fdd547ac4f1`](https://etherscan.io/tx/0x6beee6369fd31987a85509bb9418b88b86b5f06f81f1043ea25c0fdd547ac4f1) |
+| **Liquidity Addition** | [`0x87c7e3ffff53a2610399cce9733cec396947fac94ea759dfc8cf6d64f4096b62`](https://etherscan.io/tx/0x87c7e3ffff53a2610399cce9733cec396947fac94ea759dfc8cf6d64f4096b62) |
+| **Execute Transaction 1** | [`0xb5238e8b4613c3fd1b79c298e34b83f0fe997fe3c8a4cb8f7a41c7909887aa77`](https://etherscan.io/tx/0xb5238e8b4613c3fd1b79c298e34b83f0fe997fe3c8a4cb8f7a41c7909887aa77) |
+| **Execute Transaction 2** | [`0x2d7a9de4a38d264a2f44b526510f2020286fec298d8832ae405e8edd7478be5f`](https://etherscan.io/tx/0x2d7a9de4a38d264a2f44b526510f2020286fec298d8832ae405e8edd7478be5f) |
+
+✅ **All contracts deployed and verified on testnet** — Click transaction IDs above to view on block explorer.
+
+---
+
+## �📖 Overview
+
+**StockShield** is a cutting-edge Uniswap v4 Hook designed to protect liquidity providers in **tokenized securities pools** from two critical attack vectors:
 
 1. **⏰ Session Boundary Gaps** — Price divergence during market closures (nights, weekends, holidays)
 2. **📊 Continuous LVR** — Loss-versus-rebalancing during trading hours

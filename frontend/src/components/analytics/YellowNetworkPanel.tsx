@@ -62,6 +62,7 @@ export function YellowNetworkPanel() {
     const runtime = status?.runtime;
     const session = status?.session;
     const txLog = (session as unknown as { txLog?: TxLogEntry[] })?.txLog ?? [];
+    const autoSession = status?.autoSession;
 
     const runtimeBadge = useMemo(() => {
         if (!runtime) return { label: 'Unknown', tone: 'text-neutral-400 border-neutral-700 bg-neutral-900/40' };
@@ -231,6 +232,22 @@ export function YellowNetworkPanel() {
                     </div>
                 )}
 
+                {autoSession?.enabled && (
+                    <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs text-yellow-200">
+                        <div className="flex items-center justify-between">
+                            <span>Auto session rotation is enabled.</span>
+                            {autoSession.settlesAt && (
+                                <span className="font-mono text-yellow-300">
+                                    Settles at {new Date(autoSession.settlesAt).toLocaleTimeString()}
+                                </span>
+                            )}
+                        </div>
+                        {autoSession.lastError && (
+                            <div className="mt-2 text-red-400">Auto session error: {autoSession.lastError}</div>
+                        )}
+                    </div>
+                )}
+
                 {/* Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Start Session */}
@@ -393,7 +410,8 @@ export function YellowNetworkPanel() {
                             isSettleConfirming ||
                             !session ||
                             session.status !== 'ACTIVE' ||
-                            !isConnected
+                            !isConnected ||
+                            !!autoSession?.enabled
                         }
                         className="w-full bg-[#FF4D00] hover:bg-[#ff5e1a] text-white font-medium text-xs uppercase tracking-wider rounded-sm py-3 shadow-[0_0_30px_rgba(255,77,0,0.15)]"
                     >
@@ -410,6 +428,12 @@ export function YellowNetworkPanel() {
 
                 {/* Status Messages */}
                 <div className="space-y-2">
+                    {autoSession?.enabled && (
+                        <div className="text-xs text-neutral-300 border border-white/10 bg-white/[0.02] rounded-sm px-4 py-2.5 flex items-center gap-2">
+                            <Server className="w-3.5 h-3.5" />
+                            Auto sessions handle channel creation + settlement every minute (no MetaMask prompts).
+                        </div>
+                    )}
                     {!isConnected && (
                         <div className="text-xs text-amber-300 border border-amber-500/20 bg-amber-500/5 rounded-sm px-4 py-2.5 flex items-center gap-2">
                             <Wallet className="w-3.5 h-3.5" />

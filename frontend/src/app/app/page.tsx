@@ -10,10 +10,11 @@ import { useStockShield } from '@/hooks/useStockShield';
 import { useStockShieldWS } from '@/hooks/useWebSocket';
 import { Button } from '@/components/ui/button';
 import {
-    ArrowDownUp, Clock, Zap, ExternalLink, AlertTriangle, Play
+    ArrowDownUp, Clock, Zap, ExternalLink, AlertTriangle, Play, Globe
 } from 'lucide-react';
+import { getPoolENSName } from '@/hooks/useENS';
 import { DotMatrix } from '@/components/ui/dot-matrix';
-import { CONTRACTS, MOCK_TOKENS, TOKEN_INFO, ERC20_ABI, getEtherscanLink, UNIVERSAL_ROUTER_ABI, PERMIT2_ABI, STATE_VIEW_ABI, computePoolId } from '@/lib/contracts';
+import { CONTRACTS, MOCK_TOKENS, TOKEN_INFO, ERC20_ABI, getEtherscanLink, UNIVERSAL_ROUTER_ABI, PERMIT2_ABI, STATE_VIEW_ABI, MARGIN_VAULT_ABI, computePoolId } from '@/lib/contracts';
 import { formatDecimalNumber, formatTokenAmount, parseTokenAmount } from '@/lib/amounts';
 import { api } from '@/lib/api';
 
@@ -46,6 +47,10 @@ const TOKEN_OPTIONS = ['tAAPL', 'tTSLA', 'tNVDA', 'tMSFT', 'tGOOGL'] as const;
 function getTokenDecimalsByAddress(address: string): number {
     const token = TOKEN_INFO[address as keyof typeof TOKEN_INFO];
     return token?.decimals ?? 18;
+}
+
+function isBytes32(value: string): value is `0x${string}` {
+    return /^0x[a-fA-F0-9]{64}$/.test(value);
 }
 
 // ============================================================================
@@ -189,8 +194,27 @@ export default function AppPage() {
     const { isLoading: isSwapConfirming, isSuccess: isSwapConfirmed } = useWaitForTransactionReceipt({
         hash: swapHash,
     });
+    const { writeContract: closeChannel, data: closeHash, isPending: isClosingOnchain } = useWriteContract();
+    const { isLoading: isCloseConfirming, isSuccess: isCloseConfirmed } = useWaitForTransactionReceipt({
+        hash: closeHash,
+    });
     const [lastYellowState, setLastYellowState] = useState<any>(null);
     const [gasSaved, setGasSaved] = useState<number>(0);
+    const [batchMode, setBatchMode] = useState<boolean>(true);
+    const [batchTrades, setBatchTrades] = useState<Array<{
+        id: string;
+        side: 'BUY' | 'SELL';
+        asset: string;
+        amount: string;
+        at: number;
+        channelId?: string;
+        turnNum?: number;
+        signature?: string;
+        hookData?: `0x${string}`;
+        v4SwapInput?: `0x${string}`;
+    }>>([]);
+    const [batchStatus, setBatchStatus] = useState<string | null>(null);
+    const [isBatching, setIsBatching] = useState(false);
 
     // Refetch allowances immediately after approval confirmation
     useEffect(() => {
@@ -209,6 +233,10 @@ export default function AppPage() {
         refetch();
         refetchTokenToPermit2Allowance();
         refetchPermit2ToRouterAllowance();
+        if (batchMode && batchTrades.length > 0) {
+            setBatchTrades([]);
+            setBatchStatus('Batch swap confirmed on-chain.');
+        }
     }, [
         isSwapConfirmed,
         refetchUSDC,
@@ -216,6 +244,8 @@ export default function AppPage() {
         refetch,
         refetchTokenToPermit2Allowance,
         refetchPermit2ToRouterAllowance,
+        batchMode,
+        batchTrades.length,
     ]);
 
     // Record swap in Yellow session after confirmation
@@ -389,6 +419,92 @@ export default function AppPage() {
     // HANDLERS
     // =========================================================================
 
+    const ensureYellowSession = useCallback(async () => {
+        const status = await api.getYellowStatus();
+        if (status.session?.status === 'ACTIVE') {
+            return status.session;
+        }
+        const wallet = address || 'anonymous';
+        const started = await api.startYellowSession({
+            wallet,
+            allowance: 25,
+        });
+        return started.session;
+    }, [address]);
+
+    const buildV4SwapInput = useCallback((
+        signedHookData: `0x${string}`,
+        amountIn: bigint,
+        zeroForOne: boolean
+    ): `0x${string}` => {
+        const actions = '0x060c0f' as `0x${string}`; // SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL
+
+        const exactInSingleParams = encodeAbiParameters(
+            [
+                {
+                    name: 'params',
+                    type: 'tuple',
+                    components: [
+                        {
+                            name: 'poolKey',
+                            type: 'tuple',
+                            components: [
+                                { name: 'currency0', type: 'address' },
+                                { name: 'currency1', type: 'address' },
+                                { name: 'fee', type: 'uint24' },
+                                { name: 'tickSpacing', type: 'int24' },
+                                { name: 'hooks', type: 'address' },
+                            ],
+                        },
+                        { name: 'zeroForOne', type: 'bool' },
+                        { name: 'amountIn', type: 'uint128' },
+                        { name: 'amountOutMinimum', type: 'uint128' },
+                        { name: 'hookData', type: 'bytes' },
+                    ],
+                },
+            ],
+            [
+                {
+                    poolKey: {
+                        currency0: currency0 as `0x${string}`,
+                        currency1: currency1 as `0x${string}`,
+                        fee: CONTRACTS.LP_FEE,
+                        tickSpacing: CONTRACTS.TICK_SPACING,
+                        hooks: CONTRACTS.STOCK_SHIELD_HOOK as `0x${string}`,
+                    },
+                    zeroForOne,
+                    amountIn,
+                    amountOutMinimum: BigInt(0),
+                    hookData: signedHookData,
+                },
+            ]
+        );
+
+        const settleAllParams = encodeAbiParameters(
+            [
+                { name: 'currency', type: 'address' },
+                { name: 'maxAmount', type: 'uint256' },
+            ],
+            [inputCurrency as `0x${string}`, amountIn]
+        );
+
+        const takeAllParams = encodeAbiParameters(
+            [
+                { name: 'currency', type: 'address' },
+                { name: 'minAmount', type: 'uint256' },
+            ],
+            [outputCurrency as `0x${string}`, BigInt(0)]
+        );
+
+        return encodeAbiParameters(
+            [
+                { name: 'actions', type: 'bytes' },
+                { name: 'params', type: 'bytes[]' },
+            ],
+            [actions, [exactInSingleParams, settleAllParams, takeAllParams]]
+        );
+    }, [currency0, currency1, inputCurrency, outputCurrency]);
+
     const handleApprove = () => {
         if (!parsedInputAmount || parsedInputAmount <= BigInt(0)) return;
 
@@ -419,8 +535,10 @@ export default function AppPage() {
     const handleSwap = async () => {
         if (!parsedInputAmount || parsedInputAmount <= BigInt(0)) return;
         if (parsedInputAmount > maxUint128) return;
-        if (needsTokenToPermit2Approval || needsPermit2ToRouterApproval) return;
-        if (!poolExists || !hasLiquidity) return;
+        if (!batchMode) {
+            if (needsTokenToPermit2Approval || needsPermit2ToRouterApproval) return;
+            if (!poolExists || !hasLiquidity) return;
+        }
 
         const zeroForOne = isSwapMode === 'buy'
             ? MOCK_TOKENS.USDC < MOCK_TOKENS[selectedToken]
@@ -433,6 +551,76 @@ export default function AppPage() {
         const actions = '0x060c0f' as `0x${string}`; // SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL
 
         try {
+            if (batchMode) {
+                setIsBatching(true);
+                setBatchStatus(null);
+                await ensureYellowSession();
+
+                // Get Yellow-signed hookData (off-chain proof) and session log
+                let relayChannelId: string | undefined;
+                let relayTurnNum: number | undefined;
+                let relaySignature: string | undefined;
+                let signedHookData: `0x${string}` = '0x';
+                try {
+                    const signResponse = await api.signTradeState({
+                        poolId: computePoolId(currency0, currency1, CONTRACTS.LP_FEE, CONTRACTS.TICK_SPACING, CONTRACTS.STOCK_SHIELD_HOOK),
+                        asset: selectedToken,
+                        amountIn: parsedInputAmount.toString(),
+                        zeroForOne,
+                        tokenIn: inputCurrency,
+                        tokenOut: outputCurrency,
+                        hookAddress: CONTRACTS.STOCK_SHIELD_HOOK,
+                        chainId: 11155111,
+                    });
+                    signedHookData = signResponse.hookData as `0x${string}`;
+                    relayChannelId = signResponse.debug?.relayChannelId || signResponse.debug?.channelId || undefined;
+                    relayTurnNum = signResponse.debug?.turnNum || undefined;
+                    relaySignature = signResponse.debug?.signature || undefined;
+                    const yellowState = {
+                        channelId: relayChannelId || null,
+                        turnNum: relayTurnNum || 0,
+                        vpin: signResponse.debug?.vpin || 0,
+                        regime: signResponse.debug?.regime || 0,
+                    };
+                    setLastYellowState(yellowState);
+                } catch (error) {
+                    console.warn('Yellow signing failed (batch mode):', error);
+                }
+
+                try {
+                    await api.spendYellowSession({
+                        amount: parseFloat(inputAmount) * 0.001,
+                        action: `${isSwapMode === 'buy' ? 'BUY' : 'SELL'} ${selectedToken}`,
+                    });
+                } catch (error) {
+                    console.warn('Failed to record batch spend:', error);
+                }
+
+                const v4SwapInput = buildV4SwapInput(
+                    signedHookData,
+                    parsedInputAmount,
+                    zeroForOne
+                );
+
+                setBatchTrades((prev) => [
+                    ...prev,
+                    {
+                        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                        side: isSwapMode === 'buy' ? 'BUY' : 'SELL',
+                        asset: selectedToken,
+                        amount: inputAmount,
+                        at: Date.now(),
+                        channelId: relayChannelId,
+                        turnNum: relayTurnNum,
+                        signature: relaySignature,
+                        hookData: signedHookData,
+                        v4SwapInput,
+                    },
+                ]);
+                setBatchStatus('Added to batch (off-chain, no MetaMask).');
+                return;
+            }
+
             // Get Yellow-signed hookData
             let signedHookData = '0x' as `0x${string}`;
             let yellowState: any = null;
@@ -539,6 +727,69 @@ export default function AppPage() {
             });
         } catch (error) {
             // wagmi will surface swap error
+        } finally {
+            setIsBatching(false);
+        }
+    };
+
+    const handleBatchSettle = async () => {
+        setBatchStatus(null);
+        try {
+            const settled = await api.settleYellowSession({});
+            setBatchStatus(`Batch settled off-chain (${settled.session.txCount} tx).`);
+            setBatchTrades([]);
+        } catch (error) {
+            setBatchStatus(error instanceof Error ? error.message : 'Batch settle failed');
+        }
+    };
+
+    const handleBatchExecuteOnchain = async () => {
+        setBatchStatus(null);
+        try {
+            if (batchTrades.length === 0) {
+                throw new Error('No trades queued for batch execution');
+            }
+            const missing = batchTrades.find((trade) => !trade.v4SwapInput);
+            if (missing) {
+                throw new Error('Missing swap calldata for batch trade');
+            }
+            const commands = `0x${'10'.repeat(batchTrades.length)}` as `0x${string}`; // V4_SWAP per trade
+            const inputs = batchTrades.map((trade) => trade.v4SwapInput as `0x${string}`);
+            const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800);
+            swap({
+                address: CONTRACTS.UNIVERSAL_ROUTER,
+                abi: UNIVERSAL_ROUTER_ABI,
+                functionName: 'execute',
+                args: [commands, inputs, deadline],
+                chainId: 11155111,
+            });
+            setBatchStatus('MetaMask prompt opened for batch swap.');
+        } catch (error) {
+            setBatchStatus(error instanceof Error ? error.message : 'Batch swap failed');
+        }
+    };
+
+    const handleBatchCloseChannel = async () => {
+        setBatchStatus(null);
+        try {
+            const settled = await api.settleYellowSession({});
+            if (!settled.onchain.ready) {
+                throw new Error(settled.onchain.reason);
+            }
+            const channelArg = settled.onchain.args[0];
+            if (!isBytes32(channelArg)) {
+                throw new Error('Invalid channelId for on-chain close');
+            }
+            closeChannel({
+                address: CONTRACTS.MARGIN_VAULT,
+                abi: MARGIN_VAULT_ABI,
+                functionName: 'closeChannel',
+                args: [channelArg],
+                chainId: 11155111,
+            });
+            setBatchStatus('MetaMask prompt opened for channel close.');
+        } catch (error) {
+            setBatchStatus(error instanceof Error ? error.message : 'On-chain close failed');
         }
     };
 
@@ -627,22 +878,40 @@ export default function AppPage() {
                                 </div>
                             )}
 
-                            <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center justify-between mb-2">
                                 <h2 className="text-lg font-medium">Trade Stocks</h2>
-                                <div className="flex items-center gap-2 bg-[#0f0f0f] p-1 rounded-lg border border-white/5">
+                                <div className="flex items-center gap-3">
                                     <button
-                                        onClick={() => setIsSwapMode('buy')}
-                                        className={`px-3 py-1 text-xs font-medium rounded transition-colors ${isSwapMode === 'buy' ? 'bg-[#FF4D00] text-white' : 'text-neutral-500 hover:text-white'}`}
+                                        onClick={() => setBatchMode((prev) => !prev)}
+                                        className={`text-[10px] px-3 py-1 rounded-full border transition-colors ${
+                                            batchMode
+                                                ? 'border-yellow-500/40 text-yellow-300 bg-yellow-500/10'
+                                                : 'border-white/10 text-neutral-400 hover:text-white'
+                                        }`}
                                     >
-                                        Buy
+                                        {batchMode ? 'Batch Mode: ON' : 'Batch Mode: OFF'}
                                     </button>
-                                    <button
-                                        onClick={() => setIsSwapMode('sell')}
-                                        className={`px-3 py-1 text-xs font-medium rounded transition-colors ${isSwapMode === 'sell' ? 'bg-[#FF4D00] text-white' : 'text-neutral-500 hover:text-white'}`}
-                                    >
-                                        Sell
-                                    </button>
+                                    <div className="flex items-center gap-2 bg-[#0f0f0f] p-1 rounded-lg border border-white/5">
+                                        <button
+                                            onClick={() => setIsSwapMode('buy')}
+                                            className={`px-3 py-1 text-xs font-medium rounded transition-colors ${isSwapMode === 'buy' ? 'bg-[#FF4D00] text-white' : 'text-neutral-500 hover:text-white'}`}
+                                        >
+                                            Buy
+                                        </button>
+                                        <button
+                                            onClick={() => setIsSwapMode('sell')}
+                                            className={`px-3 py-1 text-xs font-medium rounded transition-colors ${isSwapMode === 'sell' ? 'bg-[#FF4D00] text-white' : 'text-neutral-500 hover:text-white'}`}
+                                        >
+                                            Sell
+                                        </button>
+                                    </div>
                                 </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-6 text-xs">
+                                <Globe className="w-3.5 h-3.5 text-[#5298FF]" />
+                                <span className="text-[#5298FF] font-mono">{getPoolENSName(selectedToken)}</span>
+                                <span className="text-neutral-600">•</span>
+                                <span className="text-neutral-500">{selectedToken.replace('t', '')}/USDC Pool</span>
                             </div>
 
                             {/* Wrong Network Warning */}
@@ -839,23 +1108,25 @@ export default function AppPage() {
                                 </ConnectButton.Custom>
                             ) : (
                                 <div className="space-y-2">
-                                    <Button
-                                        onClick={handleApprove}
-                                        className="w-full bg-white/10 hover:bg-white/20 py-4 text-sm"
-                                        disabled={isApproving || isApproveConfirming || isWrongNetwork || parsedInputAmount <= BigInt(0)}
-                                    >
-                                        {isApproving
-                                            ? approveStep === 'token_to_permit2'
-                                                ? `Approving ${isSwapMode === 'buy' ? 'USDC' : selectedToken} for Permit2...`
-                                                : 'Approving Permit2 for Universal Router...'
-                                            : isApproveConfirmed
-                                                ? '✓ Approval Confirmed'
-                                                : needsTokenToPermit2Approval
-                                                    ? `Approve ${isSwapMode === 'buy' ? 'USDC' : selectedToken} to Permit2`
-                                                    : needsPermit2ToRouterApproval
-                                                        ? 'Approve Permit2 for Router'
-                                                        : '✓ Token Approved'}
-                                    </Button>
+                                    {!batchMode && (
+                                        <Button
+                                            onClick={handleApprove}
+                                            className="w-full bg-white/10 hover:bg-white/20 py-4 text-sm"
+                                            disabled={isApproving || isApproveConfirming || isWrongNetwork || parsedInputAmount <= BigInt(0)}
+                                        >
+                                            {isApproving
+                                                ? approveStep === 'token_to_permit2'
+                                                    ? `Approving ${isSwapMode === 'buy' ? 'USDC' : selectedToken} for Permit2...`
+                                                    : 'Approving Permit2 for Universal Router...'
+                                                : isApproveConfirmed
+                                                    ? '✓ Approval Confirmed'
+                                                    : needsTokenToPermit2Approval
+                                                        ? `Approve ${isSwapMode === 'buy' ? 'USDC' : selectedToken} to Permit2`
+                                                        : needsPermit2ToRouterApproval
+                                                            ? 'Approve Permit2 for Router'
+                                                            : '✓ Token Approved'}
+                                        </Button>
+                                    )}
 
                                     <Button
                                         onClick={handleSwap}
@@ -866,18 +1137,51 @@ export default function AppPage() {
                                             isSwapping ||
                                             isSwapConfirming ||
                                             isWrongNetwork ||
-                                            needsTokenToPermit2Approval ||
-                                            needsPermit2ToRouterApproval ||
-                                            !poolExists ||
-                                            !hasLiquidity
+                                            (!batchMode && (needsTokenToPermit2Approval || needsPermit2ToRouterApproval)) ||
+                                            (!batchMode && (!poolExists || !hasLiquidity)) ||
+                                            isBatching
                                         }
                                     >
-                                        {isSwapping
-                                            ? 'Swapping...'
-                                            : isSwapConfirming
-                                                ? 'Confirming Transaction...'
-                                                : 'Swap'}
+                                        {batchMode
+                                            ? (isBatching ? 'Adding to Batch...' : 'Add to Batch')
+                                            : (isSwapping
+                                                ? 'Swapping...'
+                                                : isSwapConfirming
+                                                    ? 'Confirming Transaction...'
+                                                    : 'Swap')}
                                     </Button>
+                                    {batchMode && (
+                                        <Button
+                                            onClick={handleBatchExecuteOnchain}
+                                            className="w-full bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-200 py-3 text-sm border border-yellow-500/30"
+                                            disabled={
+                                                isWrongNetwork ||
+                                                isSwapping ||
+                                                isSwapConfirming ||
+                                                !isConnected ||
+                                                batchTrades.length === 0
+                                            }
+                                        >
+                                            {isSwapping || isSwapConfirming ? 'Executing Batch...' : 'Execute Batch On-chain (MetaMask)'}
+                                        </Button>
+                                    )}
+                                    {batchMode && (
+                                        <Button
+                                            onClick={handleBatchSettle}
+                                            className="w-full bg-white/10 hover:bg-white/20 py-3 text-sm"
+                                        >
+                                            Settle Session (Off-chain)
+                                        </Button>
+                                    )}
+                                    {batchMode && (
+                                        <Button
+                                            onClick={handleBatchCloseChannel}
+                                            className="w-full bg-white/5 hover:bg-white/10 text-neutral-300 py-3 text-xs border border-white/10"
+                                            disabled={isWrongNetwork || isClosingOnchain || isCloseConfirming || !isConnected}
+                                        >
+                                            {isClosingOnchain || isCloseConfirming ? 'Closing Channel...' : 'Close Channel On-chain (Optional)'}
+                                        </Button>
+                                    )}
                                 </div>
                             )}
 
@@ -908,6 +1212,51 @@ export default function AppPage() {
                                         <div className="mt-2 pt-2 border-t border-yellow-500/10 text-[10px] text-green-400 flex items-center gap-1">
                                             🔥 Gas saved: ~${gasSaved.toFixed(2)} (vs on-chain oracle)
                                         </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {batchMode && (
+                                <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs text-neutral-400 uppercase tracking-wider">Batch Queue</span>
+                                        <span className="text-[10px] text-neutral-500">
+                                            {batchTrades.length} trades
+                                        </span>
+                                    </div>
+                                    <div className="text-[10px] text-neutral-500 mb-2">
+                                        Note: batch execution requires Permit2 + Router approvals for input tokens.
+                                    </div>
+                                    {batchTrades.length === 0 ? (
+                                        <div className="text-xs text-neutral-500">No trades queued yet.</div>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            {batchTrades.map((trade) => (
+                                                <div key={trade.id} className="flex items-center justify-between text-xs font-mono text-neutral-300">
+                                                    <span>{trade.side} {trade.amount} {trade.asset}</span>
+                                                    <span className="text-neutral-500 flex items-center gap-2">
+                                                        {trade.signature ? `${trade.signature.slice(0, 8)}...✓` : '--'}
+                                                        {new Date(trade.at).toLocaleTimeString()}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {batchStatus && (
+                                        <div className="mt-2 text-[10px] text-yellow-300">{batchStatus}</div>
+                                    )}
+                                    {closeHash && (
+                                        <a
+                                            href={getEtherscanLink('tx', closeHash)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="mt-2 inline-flex text-[10px] text-yellow-300 hover:underline"
+                                        >
+                                            View on-chain close tx →
+                                        </a>
+                                    )}
+                                    {isCloseConfirmed && (
+                                        <div className="mt-2 text-[10px] text-green-400">On-chain close confirmed.</div>
                                     )}
                                 </div>
                             )}

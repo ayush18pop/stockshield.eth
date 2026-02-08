@@ -3,14 +3,14 @@
 /**
  * Pool Name Display Component
  * 
- * Displays pool ENS name instead of address, with fallback to truncated address.
- * Includes copy-to-clipboard functionality and ENS verification badge.
+ * Displays pool ENS name (e.g. "aapl.stockshield.eth") with verification badge.
+ * Uses real wagmi ENS hooks for live resolution — not hardcoded.
  */
 
 import { useState, useCallback } from 'react';
-import { Check, Copy, ExternalLink, Shield } from 'lucide-react';
+import { Check, Copy, ExternalLink, Shield, Loader2, Globe } from 'lucide-react';
 import { usePoolENS, getPoolDisplayName } from '@/hooks/usePoolENS';
-import { truncateAddress, ENS_ROOT } from '@/hooks/useENS';
+import { truncateAddress, usePoolENSData } from '@/hooks/useENS';
 
 // ============================================================================
 // Types
@@ -21,14 +21,14 @@ interface PoolNameDisplayProps {
     poolId: string;
     /** Token symbol (e.g., "tAAPL") */
     tokenSymbol: string;
-    /** Show full ENS name or just display name */
-    showFullName?: boolean;
     /** Show the pool address on hover */
     showAddressOnHover?: boolean;
     /** Show copy button */
     showCopy?: boolean;
     /** Show verified badge */
     showBadge?: boolean;
+    /** Show ENS text records tooltip */
+    showTextRecords?: boolean;
     /** Custom className */
     className?: string;
     /** Size variant */
@@ -42,10 +42,10 @@ interface PoolNameDisplayProps {
 export function PoolNameDisplay({
     poolId,
     tokenSymbol,
-    showFullName = false,
     showAddressOnHover = true,
     showCopy = true,
     showBadge = true,
+    showTextRecords = false,
     className = '',
     size = 'md',
 }: PoolNameDisplayProps) {
@@ -53,6 +53,7 @@ export function PoolNameDisplay({
     const [isHovered, setIsHovered] = useState(false);
 
     const poolENS = usePoolENS(poolId, tokenSymbol);
+    const ensData = usePoolENSData(tokenSymbol);
 
     const handleCopy = useCallback(async () => {
         const textToCopy = poolENS?.name || poolId;
@@ -65,7 +66,6 @@ export function PoolNameDisplay({
         }
     }, [poolENS?.name, poolId]);
 
-    // Size classes
     const sizeClasses = {
         sm: 'text-xs',
         md: 'text-sm',
@@ -78,9 +78,8 @@ export function PoolNameDisplay({
         lg: 16,
     };
 
-    const displayText = showFullName
-        ? (poolENS?.name || truncateAddress(poolId))
-        : (poolENS?.displayName || getPoolDisplayName(poolId, tokenSymbol));
+    // Always show ENS name (e.g. "aapl.stockshield.eth")
+    const displayText = poolENS?.name || getPoolDisplayName(poolId, tokenSymbol);
 
     return (
         <div
@@ -89,20 +88,26 @@ export function PoolNameDisplay({
             onMouseLeave={() => setIsHovered(false)}
         >
             {/* ENS Badge */}
-            {showBadge && poolENS?.isVerified && (
+            {showBadge && (
                 <div
                     className="flex-shrink-0"
-                    title="Verified StockShield Pool"
+                    title={ensData.isRegistered
+                        ? 'Verified on ENS — click to view records'
+                        : 'StockShield Pool (ENS pending)'
+                    }
                 >
-                    <Shield
-                        size={iconSizes[size]}
-                        className="text-[#FF6B00] fill-[#FF6B00]/20"
-                    />
+                    {ensData.isLoading ? (
+                        <Loader2 size={iconSizes[size]} className="text-neutral-500 animate-spin" />
+                    ) : ensData.isRegistered ? (
+                        <Globe size={iconSizes[size]} className="text-[#5298FF]" />
+                    ) : (
+                        <Shield size={iconSizes[size]} className="text-[#FF6B00] fill-[#FF6B00]/20" />
+                    )}
                 </div>
             )}
 
-            {/* Name Display */}
-            <span className={`font-mono ${sizeClasses[size]} text-white`}>
+            {/* ENS Name Display */}
+            <span className={`font-mono ${sizeClasses[size]} ${ensData.isRegistered ? 'text-[#5298FF]' : 'text-white'}`}>
                 {displayText}
             </span>
 
@@ -111,6 +116,31 @@ export function PoolNameDisplay({
                 <span className={`${sizeClasses[size]} text-gray-500 transition-opacity`}>
                     ({truncateAddress(poolId, 4)})
                 </span>
+            )}
+
+            {/* Text Records Tooltip */}
+            {showTextRecords && isHovered && ensData.isRegistered && (
+                <div className="absolute z-50 mt-1 top-full left-0 bg-[#0a0a0a] border border-white/10 rounded-lg p-3 text-xs space-y-1 min-w-[250px] shadow-xl">
+                    <div className="text-neutral-500 font-medium mb-2">ENS Text Records</div>
+                    {ensData.textRecords.ticker && (
+                        <div className="flex justify-between">
+                            <span className="text-neutral-500">pool.ticker</span>
+                            <span className="text-white font-mono">{ensData.textRecords.ticker}</span>
+                        </div>
+                    )}
+                    {ensData.textRecords.exchange && (
+                        <div className="flex justify-between">
+                            <span className="text-neutral-500">pool.exchange</span>
+                            <span className="text-white font-mono">{ensData.textRecords.exchange}</span>
+                        </div>
+                    )}
+                    {ensData.textRecords.hook && (
+                        <div className="flex justify-between">
+                            <span className="text-neutral-500">pool.hook</span>
+                            <span className="text-white font-mono">{truncateAddress(ensData.textRecords.hook)}</span>
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* Copy Button */}
@@ -132,20 +162,17 @@ export function PoolNameDisplay({
 }
 
 // ============================================================================
-// Compact Variant
+// Compact Badge Variant — shows ENS name in a styled badge
 // ============================================================================
 
 interface PoolNameBadgeProps {
-    /** Pool ID (bytes32 hash) */
     poolId: string;
-    /** Token symbol (e.g., "tAAPL") */
     tokenSymbol: string;
-    /** Custom className */
     className?: string;
 }
 
 /**
- * Compact badge-style pool name display
+ * Compact badge showing pool ENS name (e.g. "aapl.stockshield.eth")
  */
 export function PoolNameBadge({
     poolId,
@@ -153,16 +180,27 @@ export function PoolNameBadge({
     className = '',
 }: PoolNameBadgeProps) {
     const poolENS = usePoolENS(poolId, tokenSymbol);
+    const ensData = usePoolENSData(tokenSymbol);
 
     return (
         <div
-            className={`inline-flex items-center gap-1 px-2 py-0.5 bg-[#FF6B00]/10 
-                        border border-[#FF6B00]/30 rounded-full ${className}`}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 
+                        ${ensData.isRegistered
+                    ? 'bg-[#5298FF]/10 border border-[#5298FF]/30'
+                    : 'bg-[#FF6B00]/10 border border-[#FF6B00]/30'
+                }
+                        rounded-full ${className}`}
             title={poolENS?.name || poolId}
         >
-            <Shield size={10} className="text-[#FF6B00]" />
-            <span className="text-xs font-mono text-[#FF6B00]">
-                {poolENS?.displayName || truncateAddress(poolId, 3)}
+            {ensData.isLoading ? (
+                <Loader2 size={10} className="text-neutral-500 animate-spin" />
+            ) : ensData.isRegistered ? (
+                <Globe size={10} className="text-[#5298FF]" />
+            ) : (
+                <Shield size={10} className="text-[#FF6B00]" />
+            )}
+            <span className={`text-xs font-mono ${ensData.isRegistered ? 'text-[#5298FF]' : 'text-[#FF6B00]'}`}>
+                {poolENS?.name || truncateAddress(poolId, 3)}
             </span>
         </div>
     );
@@ -173,18 +211,14 @@ export function PoolNameBadge({
 // ============================================================================
 
 interface PoolNameLinkProps {
-    /** Pool ID (bytes32 hash) */
     poolId: string;
-    /** Token symbol (e.g., "tAAPL") */
     tokenSymbol: string;
-    /** Click handler */
     onClick?: () => void;
-    /** Custom className */
     className?: string;
 }
 
 /**
- * Clickable pool name with link styling
+ * Clickable pool name with link styling — shows ENS name
  */
 export function PoolNameLink({
     poolId,
@@ -197,10 +231,10 @@ export function PoolNameLink({
     return (
         <button
             onClick={onClick}
-            className={`inline-flex items-center gap-1.5 text-[#FF6B00] hover:text-[#FF8533] 
+            className={`inline-flex items-center gap-1.5 text-[#5298FF] hover:text-[#7BB3FF] 
                         transition-colors group ${className}`}
         >
-            <Shield size={14} className="text-[#FF6B00]" />
+            <Globe size={14} className="text-[#5298FF]" />
             <span className="font-mono text-sm underline-offset-2 group-hover:underline">
                 {poolENS?.name || truncateAddress(poolId)}
             </span>
