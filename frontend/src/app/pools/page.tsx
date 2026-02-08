@@ -13,6 +13,7 @@ import { useStockShield } from '@/hooks/useStockShield';
 import { usePoolDiscovery, PoolInfo } from '@/hooks/usePoolDiscovery';
 import { useAccount } from 'wagmi';
 import { CONTRACTS, MOCK_TOKENS } from '@/lib/contracts';
+import { PoolNameBadge } from '@/components/PoolNameDisplay';
 
 // ============================================================================
 // MAIN POOLS PAGE
@@ -203,7 +204,7 @@ export default function PoolsPage() {
                             <thead className="border-b border-white/5">
                                 <tr className="text-left text-sm text-neutral-500">
                                     <th className="px-6 py-4 font-medium">Pool</th>
-                                    <th className="px-6 py-4 font-medium">Pool ID</th>
+                                    <th className="px-6 py-4 font-medium">ENS Name</th>
                                     <th className="px-6 py-4 font-medium">Pool Balances</th>
                                     <th className="px-6 py-4 font-medium">Liquidity (raw)</th>
                                     <th className="px-6 py-4 font-medium">Tick</th>
@@ -232,9 +233,12 @@ export default function PoolsPage() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <code className="text-xs text-neutral-400 bg-white/5 px-2 py-1 rounded font-mono">
-                                                    {pool.poolId.slice(0, 10)}...{pool.poolId.slice(-6)}
-                                                </code>
+                                                <div className="flex flex-col gap-1">
+                                                    <PoolNameBadge poolId={pool.poolId} tokenSymbol={pool.tokenSymbol} />
+                                                    <code className="text-[10px] text-neutral-600 font-mono">
+                                                        {pool.poolId.slice(0, 10)}...{pool.poolId.slice(-6)}
+                                                    </code>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="space-y-1">

@@ -128,6 +128,9 @@ export class YellowClient {
                 console.log('🔌 Disconnected from Yellow Network');
                 this.isConnected = false;
                 this.isAuthenticated = false;
+                if (this.onConnectionLostCallback) {
+                    this.onConnectionLostCallback();
+                }
             };
 
             // Timeout after 10 seconds
@@ -137,6 +140,15 @@ export class YellowClient {
                 }
             }, 10000);
         });
+    }
+
+    private onConnectionLostCallback: (() => void) | null = null;
+
+    /**
+     * Register a callback for when connection is lost
+     */
+    onConnectionLost(callback: () => void): void {
+        this.onConnectionLostCallback = callback;
     }
 
     /**

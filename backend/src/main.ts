@@ -60,33 +60,69 @@ async function main() {
     // ========================================================================
     // 2. Initialize Yellow Network Client (optional - can fail gracefully)
     // ========================================================================
+    // ========================================================================
+    // 2. Initialize Yellow Network Client (with reconnection logic)
+    // ========================================================================
     console.log('2️⃣  Initializing Yellow Network Client...');
     const yellowClient = createYellowClient();
     let channelId: string | null = null;
     let stateBroadcaster: StateBroadcaster | null = null;
+    let isReconnecting = false;
 
-    try {
-        await yellowClient.connect();
-        await yellowClient.authenticate();
-        channelId = await yellowClient.createChannel();
-        console.log(`✅ Yellow Network connected, channel: ${channelId}\n`);
+    // Initialize state broadcaster early
+    stateBroadcaster = new StateBroadcaster(
+        yellowClient,
+        vpinCalc,
+        regimeDetector,
+        oracleAggregator,
+        {
+            vpinUpdateInterval: 5000,
+            regimeCheckInterval: 60000,
+            minVPINChange: 0.05,
+        }
+    );
 
-        stateBroadcaster = new StateBroadcaster(
-            yellowClient,
-            vpinCalc,
-            regimeDetector,
-            oracleAggregator,
-            {
-                vpinUpdateInterval: 5000,
-                regimeCheckInterval: 60000,
-                minVPINChange: 0.05,
+    const initializeYellow = async () => {
+        try {
+            if (yellowClient.connected) return;
+
+            console.log('🔌 Connecting to Yellow Network...');
+            await yellowClient.connect();
+            await yellowClient.authenticate();
+            const newChannelId = await yellowClient.createChannel();
+
+            channelId = newChannelId; // Update global channel ID
+            console.log(`✅ Yellow Network connected, channel: ${channelId}\n`);
+
+            // Restart state broadcaster with new channel
+            if (stateBroadcaster) {
+                stateBroadcaster.stop();
+                await stateBroadcaster.start(channelId);
             }
-        );
-        await stateBroadcaster.start(channelId);
-    } catch (error) {
-        console.warn('⚠️  Yellow Network connection failed (continuing without it)');
-        console.warn(`   Reason: ${error instanceof Error ? error.message : error}\n`);
-    }
+
+            isReconnecting = false;
+        } catch (error) {
+            console.warn('⚠️  Yellow Network connection failed');
+            console.warn(`   Reason: ${error instanceof Error ? error.message : error}\n`);
+
+            // Schedule retry if not already reconnecting
+            if (!isReconnecting) {
+                isReconnecting = true;
+                console.log('🔄 Scheduling reconnection in 5s...');
+                setTimeout(initializeYellow, 5000);
+            }
+        }
+    };
+
+    // Handle connection loss
+    yellowClient.onConnectionLost(() => {
+        console.log('⚠️  Connection lost - attempting reconnect...');
+        stateBroadcaster?.stop();
+        setTimeout(initializeYellow, 1000);
+    });
+
+    // Initial connection attempt
+    initializeYellow();
 
     // ========================================================================
     // 3. Start API Server

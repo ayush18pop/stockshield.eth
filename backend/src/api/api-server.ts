@@ -98,6 +98,16 @@ interface AutoSettleEvent {
 // API Server
 // ============================================================================
 
+interface PoolInfo {
+    poolId: string;
+    asset: string;
+    liquidity: string;
+    vpin: number;
+    fee: number;
+    regime: Regime;
+    ensName?: string;
+}
+
 export class APIServer {
     private server: http.Server | null = null;
     private vpinCalc: VPINCalculator;
@@ -123,9 +133,9 @@ export class APIServer {
 
     // Mock data for demo (since contracts aren't deployed)
     private mockPools: PoolInfo[] = [
-        { poolId: '0xaapl', asset: 'AAPL', liquidity: '1000000', vpin: 0.35, fee: 15, regime: Regime.CORE_SESSION },
-        { poolId: '0xtsla', asset: 'TSLA', liquidity: '750000', vpin: 0.42, fee: 22, regime: Regime.CORE_SESSION },
-        { poolId: '0xeth', asset: 'ETH', liquidity: '2500000', vpin: 0.28, fee: 12, regime: Regime.CORE_SESSION },
+        { poolId: '0xaapl', asset: 'AAPL', liquidity: '1000000', vpin: 0.35, fee: 15, regime: Regime.CORE_SESSION, ensName: 'aapl.pools.stockshield.eth' },
+        { poolId: '0xtsla', asset: 'TSLA', liquidity: '750000', vpin: 0.42, fee: 22, regime: Regime.CORE_SESSION, ensName: 'tsla.pools.stockshield.eth' },
+        { poolId: '0xeth', asset: 'ETH', liquidity: '2500000', vpin: 0.28, fee: 12, regime: Regime.CORE_SESSION, ensName: 'eth.pools.stockshield.eth' },
     ];
 
     constructor(
@@ -854,7 +864,7 @@ export class APIServer {
         body: Record<string, unknown>
     ): Promise<void> {
         const runtime = this.getYellowRuntimeStatus();
-        
+
         // Demo fallback: if Yellow is unavailable, generate mock signed data
         const yellowAvailable = this.yellow && runtime.connected && runtime.authenticated;
 

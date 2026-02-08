@@ -47,7 +47,7 @@ function sqrtBigInt(value: bigint): bigint {
  *       price = 2e18 / 100e6 = 2e10 (correct raw price for v4)
  */
 function computeSqrtPriceX96FromAmounts(
-    amount0Raw: bigint, 
+    amount0Raw: bigint,
     amount1Raw: bigint,
 ): bigint {
     if (amount0Raw <= BigInt(0) || amount1Raw <= BigInt(0)) {
@@ -496,9 +496,15 @@ export function CreatePoolModal({ isOpen, onClose, onPoolCreated }: CreatePoolMo
                         <div className="text-center py-8">
                             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
                             <h4 className="text-xl font-bold text-white mb-2">Pool Created!</h4>
-                            <p className="text-neutral-400 text-sm mb-6">
+                            <p className="text-neutral-400 text-sm mb-2">
                                 Your {selectedToken?.symbol}/USDC pool has been initialized with liquidity.
                             </p>
+                            <div className="bg-[#FF4D00]/10 border border-[#FF4D00]/30 rounded-lg px-4 py-3 mb-6">
+                                <p className="text-xs text-neutral-500 mb-1">Pool ENS Name</p>
+                                <p className="text-[#FF4D00] font-mono font-medium">
+                                    {selectedToken?.symbol.toLowerCase()}.pools.stockshield.eth
+                                </p>
+                            </div>
                             <Button className="w-full bg-[#FF4D00] hover:bg-[#ff5e1a] text-black font-bold" onClick={() => { resetModal(); onClose(); }}>
                                 Done
                             </Button>

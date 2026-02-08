@@ -15,6 +15,7 @@ import {
 import { DotMatrix } from '@/components/ui/dot-matrix';
 import { CONTRACTS, MOCK_TOKENS, TOKEN_INFO, ERC20_ABI, getEtherscanLink, UNIVERSAL_ROUTER_ABI, PERMIT2_ABI, STATE_VIEW_ABI, computePoolId } from '@/lib/contracts';
 import { formatDecimalNumber, formatTokenAmount, parseTokenAmount } from '@/lib/amounts';
+import { api } from '@/lib/api';
 
 // ============================================================================
 // REGIME CONFIG (Regime enum from contract - matches Solidity exactly)
@@ -351,6 +352,10 @@ export default function AppPage() {
         if (isSwapMode === 'buy') return feeAmountInputToken;
         return feeAmountInputToken * effectiveUsdcPerStock;
     })();
+    const amountAfterFee = inputNum - feeAmountInputToken;
+    const amountAfterFeeDisplay = inputNum > 0
+        ? `${formatDecimalNumber(amountAfterFee, Math.min(inputTokenDecimals, 6))} ${isSwapMode === 'buy' ? 'USDC' : selectedToken}`
+        : '';
     const estimateSourceLabel = hasExtremePoolPrice
         ? 'Fallback reference price (pool price invalid)'
         : (poolSpotUsdcPerStock !== null ? 'Pool mid-price' : 'Fallback reference price');
@@ -431,9 +436,9 @@ export default function AppPage() {
             // Get Yellow-signed hookData
             let signedHookData = '0x' as `0x${string}`;
             let yellowState: any = null;
-            
+
             try {
-                const signResponse = await api.signYellowTrade({
+                const signResponse = await api.signTradeState({
                     poolId: computePoolId(currency0, currency1, CONTRACTS.LP_FEE, CONTRACTS.TICK_SPACING, CONTRACTS.STOCK_SHIELD_HOOK),
                     asset: selectedToken,
                     amountIn: parsedInputAmount.toString(),
@@ -445,10 +450,10 @@ export default function AppPage() {
                 });
                 signedHookData = signResponse.hookData as `0x${string}`;
                 yellowState = {
-                    channelId: signResponse.channelId,
-                    turnNumber: signResponse.turnNumber,
-                    vpin: signResponse.vpin,
-                    regime: signResponse.regime,
+                    channelId: signResponse.debug?.relayChannelId || signResponse.debug?.channelId || null,
+                    turnNum: signResponse.debug?.turnNum || 0,
+                    vpin: signResponse.debug?.vpin || 0,
+                    regime: signResponse.debug?.regime || 0,
                 };
                 setLastYellowState(yellowState);
                 setGasSaved(0.48); // ~150k gas saved
@@ -799,20 +804,24 @@ export default function AppPage() {
                                     <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Transaction Summary</div>
                                     <div className="space-y-1.5 text-sm">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-neutral-400">You pay</span>
+                                            <span className="text-neutral-400">Total input amount</span>
                                             <span className="font-mono text-white">{inputAmount} {isSwapMode === 'buy' ? 'USDC' : selectedToken}</span>
                                         </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-neutral-400">Protocol fee ({totalFee} bps)</span>
-                                            <span className="font-mono text-amber-400">-{feeAmountDisplay}</span>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-neutral-500 pl-4">├─ Protocol fee ({totalFee} bps)</span>
+                                            <span className="font-mono text-amber-400">{feeAmountDisplay}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-neutral-500 pl-4">└─ Amount swapped</span>
+                                            <span className="font-mono text-neutral-300">{amountAfterFeeDisplay}</span>
                                         </div>
                                         <div className="h-px bg-white/10 my-2"></div>
                                         <div className="flex items-center justify-between font-medium">
-                                            <span className="text-white">You receive (after fees)</span>
+                                            <span className="text-white">You receive</span>
                                             <span className="font-mono text-green-400">{estimatedOutputDisplay} {isSwapMode === 'buy' ? selectedToken : 'USDC'}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs pt-2 border-t border-white/5">
-                                            <span className="text-neutral-600">Total fee in USDC</span>
+                                            <span className="text-neutral-600">Fee value in USDC</span>
                                             <span className="font-mono text-[#FF4D00]">~${formatDecimalNumber(feeAmountUsdc, 4)}</span>
                                         </div>
                                     </div>

@@ -4,7 +4,6 @@ import { parseUnits, keccak256, encodePacked, toHex, stringToHex, pad } from 'vi
 import { CONTRACTS, GAP_AUCTION_ABI } from '@/lib/contracts';
 import { Button } from '@/components/ui/button';
 import { Clock, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
-
 interface GapAuctionWidgetProps {
     activeAuctionId: string | null;
     refetch: () => void;

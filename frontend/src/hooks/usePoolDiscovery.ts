@@ -21,6 +21,8 @@ export interface PoolInfo {
     tokenSymbol: string;
     /** Display name (e.g. "AAPL/USDC") */
     name: string;
+    /** ENS name (e.g. "aapl.pools.stockshield.eth") */
+    ensName: string;
     /** Currency0 address (lower) */
     currency0: string;
     /** Currency1 address (upper) */
@@ -206,10 +208,12 @@ export function usePoolDiscovery() {
             // Only include pools that exist on-chain
             if (existsOnChain) {
                 const displaySymbol = key.tokenSymbol.replace('t', '');
+                const ensSymbol = displaySymbol.toLowerCase();
                 discoveredPools.push({
                     poolId: key.poolId,
                     tokenSymbol: key.tokenSymbol,
                     name: `${displaySymbol}/USDC`,
+                    ensName: `${ensSymbol}.pools.stockshield.eth`,
                     currency0: key.currency0,
                     currency1: key.currency1,
                     liquidity,
