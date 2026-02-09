@@ -15,6 +15,19 @@ import { config } from '@/lib/config';
 // CSS import MUST be in a Client Component to avoid SSR issues
 import '@rainbow-me/rainbowkit/styles.css';
 
+// Polyfill localStorage for SSR (some dependencies still try to access it)
+if (typeof window === 'undefined') {
+    // @ts-ignore
+    global.localStorage = {
+        getItem: () => null,
+        setItem: () => {},
+        removeItem: () => {},
+        clear: () => {},
+        key: () => null,
+        length: 0,
+    };
+}
+
 // Create QueryClient outside component to prevent recreation on re-renders
 const queryClient = new QueryClient();
 

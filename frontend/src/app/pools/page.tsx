@@ -16,6 +16,9 @@ import { CONTRACTS, MOCK_TOKENS } from '@/lib/contracts';
 import { PoolNameBadge } from '@/components/PoolNameDisplay';
 import { getPoolENSName, ENS_ROOT } from '@/hooks/useENS';
 
+// Disable SSR for this page (uses wagmi hooks and localStorage)
+export const dynamic = 'force-dynamic';
+
 // ============================================================================
 // MAIN POOLS PAGE
 // ============================================================================

@@ -9,6 +9,9 @@ import { DotMatrix } from '@/components/ui/dot-matrix';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
+// Disable SSR for this page (uses wagmi hooks)
+export const dynamic = 'force-dynamic';
+
 export default function AnalyticsPage() {
     const { regime, marketState } = useStockShield();
 

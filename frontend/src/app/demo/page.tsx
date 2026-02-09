@@ -39,6 +39,9 @@ import {
     seekToKeyMoment,
 } from '@/lib/simulation/simulation-engine';
 
+// Disable SSR for this page (uses client-side state)
+export const dynamic = 'force-dynamic';
+
 // ============================================================================
 // TYPES & CONSTANTS
 // ============================================================================

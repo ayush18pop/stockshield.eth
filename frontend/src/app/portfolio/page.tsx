@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+
+// Disable SSR for this page (uses wagmi hooks)
+export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {

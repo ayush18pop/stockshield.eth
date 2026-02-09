@@ -112,6 +112,7 @@ export function usePoolDiscovery() {
 
     // Load stored pools on mount
     useEffect(() => {
+        if (typeof window === 'undefined') return;
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (raw) {
@@ -123,6 +124,7 @@ export function usePoolDiscovery() {
     }, []);
 
     const saveStoredPools = (newPools: StoredPool[]) => {
+        if (typeof window === 'undefined') return;
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(newPools));
             setStoredPools(newPools);

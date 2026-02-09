@@ -111,5 +111,9 @@ export function getPoolDisplayName(
  */
 export function clearPoolENSCache(): void {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem('stockshield_pool_ens_cache');
+    try {
+        localStorage.removeItem('stockshield_pool_ens_cache');
+    } catch (error) {
+        console.error('Failed to clear pool ENS cache:', error);
+    }
 }

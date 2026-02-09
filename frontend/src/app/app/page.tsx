@@ -18,6 +18,9 @@ import { CONTRACTS, MOCK_TOKENS, TOKEN_INFO, ERC20_ABI, getEtherscanLink, UNIVER
 import { formatDecimalNumber, formatTokenAmount, parseTokenAmount } from '@/lib/amounts';
 import { api } from '@/lib/api';
 
+// Disable SSR for this page (uses wagmi hooks that require client-side)
+export const dynamic = 'force-dynamic';
+
 // ============================================================================
 // REGIME CONFIG (Regime enum from contract - matches Solidity exactly)
 // ============================================================================
