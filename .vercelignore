@@ -1,0 +1,8 @@
+stockshield/backend
+stockshield/contracts
+stockshield/docs
+irrelevant_now
+*.md
+!stockshield/frontend/README.md
+.git
+node_modules
