@@ -12,7 +12,7 @@ dist/
 build/
 out/
 coverage/
-lib/
+
 
 # Hardhat / Truffle / Foundry (Solidity contracts)
 artifacts/
