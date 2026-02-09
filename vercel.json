@@ -1,9 +1,5 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-  "buildCommand": "yarn build",
-  "outputDirectory": ".next",
-  "installCommand": "yarn install",
-  "framework": "nextjs",
-  "rootDirectory": "stockshield/frontend"
+  "buildCommand": "cd frontend && yarn build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && yarn install"
 }
