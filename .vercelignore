@@ -1,8 +1,4 @@
-stockshield/backend
-stockshield/contracts
-stockshield/docs
-irrelevant_now
-*.md
-!stockshield/frontend/README.md
+backend
+contracts
+docs
 .git
-node_modules
