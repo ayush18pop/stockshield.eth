@@ -428,7 +428,7 @@ stockshield/
 | Oracle Aggregator | Multi | Pyth + Chainlink + TWAP consensus |
 | API Server | Full | REST + WebSocket for frontend |
 
-📄 **See also**: [ETHGlobal Submission](./docs/ETHGLOBAL_SUBMISSION.md) | [Yellow Integration Deep-Dive](./docs/YELLOW_INTEGRATION.md) | [Demo Script](./docs/DEMO_SCRIPT.md)
+📄 **See also**: [Whitepaper](./docs/StockShield_whitepaper.pdf) | [ETHGlobal Submission](./docs/ETHGLOBAL_SUBMISSION.md) | [Yellow Integration Deep-Dive](./docs/YELLOW_INTEGRATION.md) | [Demo Script](./docs/DEMO_SCRIPT.md)
 
 ---
 
@@ -463,6 +463,7 @@ quadrantChart
 
 ## 📚 Documentation
 
+- 📄 [StockShield Whitepaper](./docs/StockShield_whitepaper.pdf) — Full technical specification
 - 🟡 [Yellow Integration](./docs/YELLOW_INTEGRATION.md) — SDK deep-dive for judges
 - 📐 [Math Formulas](./MATH_FORMULAS.md) — Fee and auction calculations
 
