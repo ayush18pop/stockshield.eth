@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc",
     "test": "npm run test:prod",
-    "start": "RUN_MODE=api npx ts-node src/main.ts",
+    "start": "node dist/main.js",
+    "start:dev": "RUN_MODE=api npx ts-node src/main.ts",
     "start:demo": "RUN_MODE=demo npx ts-node src/main.ts",
     "dev": "RUN_MODE=api npx ts-node src/main.ts",
     "test:yellow": "npx ts-node src/yellow/test-client.ts",

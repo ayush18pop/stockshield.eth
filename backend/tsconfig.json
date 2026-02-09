@@ -5,7 +5,7 @@
     "outDir": "./dist",
     // Module Settings for Node.js
     "module": "CommonJS",
-    "target": "ES2020",
+    "target": "ES2022",
     "moduleResolution": "node",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -14,7 +14,8 @@
       "node"
     ],
     "lib": [
-      "ES2020"
+      "ES2022",
+      "DOM"
     ],
     // Other Outputs
     "sourceMap": true,
